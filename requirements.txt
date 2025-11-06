@@ -1,0 +1,13 @@
+# OpenMMと関連パッケージ
+openmm>=8.0.0
+numpy>=1.24.0
+scipy>=1.10.0
+
+# データ処理
+pandas>=2.0.0
+
+# 可視化
+matplotlib>=3.7.0
+
+# テスト
+pytest>=7.4.0
