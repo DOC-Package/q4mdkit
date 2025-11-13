@@ -1,8 +1,37 @@
 """
-ユーティリティ関数
+Utility functions
 """
 import logging
 from datetime import datetime
+
+
+def setup_logging(level: str, format_string: str):
+    """Set up logging configuration."""
+    logging.basicConfig(
+        level=getattr(logging, level.upper()),
+        format=format_string,
+    )
+    # Adjust third-party log levels
+    logging.getLogger("matplotlib").setLevel(logging.WARNING)
+
+
+def get_timestamp() -> str:
+    """Return a timestamp string (YYYYMMDD_HHMMSS)."""
+    return datetime.now().strftime("%Y%m%d_%H%M%S")
+
+
+def print_header(text: str):
+    """Print a centered header banner."""
+    width = 60
+    print("\n" + "=" * width)
+    print(text.center(width))
+    print("=" * width + "\n")
+
+
+def print_dict(d: dict, indent: int = 0):
+    """Print a dictionary with indentation."""
+    for key, value in d.items():
+        print(f"{'  ' * indent}{key}: {value}")
 from pathlib import Path
 
 

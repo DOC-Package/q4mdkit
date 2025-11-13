@@ -1,84 +1,112 @@
 """
-メインエントリーポイント
-プログラムの実行開始点
+Main entry point
 """
 import logging
 import sys
 from pathlib import Path
 
-# 親ディレクトリをパスに追加（モジュールインポートのため）
+# Add parent directory to path (for module imports)
 sys.path.insert(0, str(Path(__file__).parent))
 
 from config import (
     SIMULATION_CONFIG,
+    SIMULATION_ENGINE,
     LOG_LEVEL,
     LOG_FORMAT,
     ensure_directories,
     get_output_path,
 )
-from modules.utils import setup_logging, get_timestamp, print_header, print_dict
-from modules.crystal_structure import CrystalStructure
-from modules.simulation import Simulator
-from modules.analysis import ResultAnalyzer
+from common import (
+    setup_logging,
+    get_timestamp,
+    print_header,
+    print_dict,
+    CrystalStructure,
+    ResultAnalyzer,
+)
+from engines.openmm import OpenMMSimulator
+from engines.pycharmm import PycharmmSimulator
 
 logger = logging.getLogger(__name__)
 
 
+def get_simulator(engine_name: str, config: dict):
+    """Return a simulator instance for the requested engine.
+
+    Args:
+        engine_name: Engine name ('openmm' or 'pycharmm')
+        config: Simulation configuration
+
+    Returns:
+        A simulator instance
+    """
+    if engine_name.lower() == "openmm":
+        return OpenMMSimulator(config)
+    elif engine_name.lower() == "pycharmm":
+        return PycharmmSimulator(config)
+    else:
+        raise ValueError(f"Unsupported engine: {engine_name}")
+
+
 def main():
-    """メイン実行関数"""
-    # ロギング設定
+    """Main execution function."""
+    # Configure logging
     setup_logging(LOG_LEVEL, LOG_FORMAT)
     
-    # ディレクトリ確認
+    # Ensure directories exist
     ensure_directories()
     
-    print_header("OpenMM Crystal Simulation")
+    print_header(f"Crystal MD Simulation ({SIMULATION_ENGINE.upper()})")
     
-    # 1. 結晶構造の生成
-    logger.info("結晶構造を生成中...")
+    # 1. Generate crystal structure
+    logger.info("Generating crystal structure...")
     crystal = CrystalStructure(
         lattice_constant=0.4,  # nm
         num_cells=(3, 3, 3)
     )
     positions = crystal.generate_fcc_lattice()
-    logger.info(f"原子数: {crystal.get_num_atoms()}")
-    logger.info(f"ボックスサイズ: {crystal.get_box_vectors()}")
+    box_vectors = crystal.get_box_vectors()
+    logger.info(f"Number of atoms: {crystal.get_num_atoms()}")
+    logger.info(f"Box size: {box_vectors[0, 0]:.2f} x {box_vectors[1, 1]:.2f} x {box_vectors[2, 2]:.2f} nm")
     
-    # 2. シミュレーションのセットアップと実行
+    # 2. Select simulation engine
     logger.info("\n" + "="*60)
-    simulator = Simulator(SIMULATION_CONFIG)
-    simulator.setup()
+    logger.info(f"Simulation engine: {SIMULATION_ENGINE}")
+    simulator = get_simulator(SIMULATION_ENGINE, SIMULATION_CONFIG)
+    
+    # 3. Set up and run simulation
+    simulator.setup(positions, box_vectors)
     simulator.run()
     
-    # 3. 結果の解析
+    # 4. Analyze results
     logger.info("\n" + "="*60)
-    logger.info("結果を解析中...")
+    logger.info("Analyzing results...")
     results = simulator.get_results()
     analyzer = ResultAnalyzer(results)
     
-    # 統計量を計算
+    # Compute statistics
     stats = analyzer.calculate_statistics()
-    print("\n統計量:")
+    print("\nStatistics:")
     print_dict(stats, indent=2)
     
-    # 4. 結果の保存
+    # 5. Save results
     logger.info("\n" + "="*60)
     timestamp = get_timestamp()
-    output_base = get_output_path(f"simulation_{timestamp}")
+    output_base = get_output_path(f"simulation_{SIMULATION_ENGINE}_{timestamp}")
     
     analyzer.save_data(output_base)
     analyzer.plot_results(output_base)
     
-    print_header("完了")
-    logger.info(f"結果は {output_base.parent} に保存されました")
+    print_header("Done")
+    logger.info(f"Results saved to {output_base.parent}")
 
 
 if __name__ == "__main__":
     try:
         main()
     except KeyboardInterrupt:
-        logger.info("\n中断されました")
+        logger.info("\nInterrupted by user")
         sys.exit(0)
     except Exception as e:
-        logger.error(f"エラーが発生しました: {e}", exc_info=True)
+        logger.error(f"An error occurred: {e}", exc_info=True)
         sys.exit(1)

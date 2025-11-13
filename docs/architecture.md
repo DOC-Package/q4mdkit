@@ -1,107 +1,131 @@
-# アーキテクチャ設計
+# Architecture
 
-## 概要
-このプロジェクトは、パッケージ化しないPythonプロジェクトの基本構造を示す例です。
+## Overview
+This document describes the project architecture and directory layout used in this example Python project.
 
-## ディレクトリ構造の説明
+## Directory structure explanation
 
-### `src/` - ソースコード
-メインのソースコードを配置します。
+### `src/` - Source code
+Contains the main source code for the project.
 
-- **`main.py`**: エントリーポイント。プログラムの実行開始点
-- **`config.py`**: 設定管理。プロジェクト全体で使用する定数や設定を一元管理
-- **`modules/`**: 機能別モジュール。関連する機能をグループ化
+- **`main.py`**: Entry point for the application
+- **`config.py`**: Centralized configuration (constants, paths, simulation parameters)
+- **`common/`**: Shared modules used by different engines (crystal generation, analysis, utilities)
 
-### `tests/` - テストコード
-単体テストや統合テストを配置します。
+### `tests/` - Tests
+Unit and integration tests live here.
 
-- テストファイルは`test_`で始める
-- 各モジュールに対応するテストファイルを作成
+- Test files should be prefixed with `test_`
+- Create test files corresponding to modules under `src/`
 
-### `data/` - データファイル
-入出力データを配置します。
+### `data/` - Data files
+Input and output data such as initial structures and simulation results.
 
-- **`input/`**: 入力データ（設定ファイル、初期構造など）
-- **`output/`**: 出力結果（シミュレーション結果、プロットなど）
+- **`input/`**: Input files
+- **`output/`**: Generated outputs (simulation results, plots)
 
-### `docs/` - ドキュメント
-設計書、使い方、APIリファレンスなどを配置します。
+### `docs/` - Documentation
+Architecture documents, usage guides and API references.
 
-## モジュール設計
+## Module design
 
-### 1. `config.py` - 設定管理
-- プロジェクト全体で使用する設定を一元管理
-- 定数、パス、パラメータを定義
-- 環境依存の設定を吸収
+### Core Modules
 
-### 2. `modules/crystal_structure.py` - 結晶構造
-- 結晶構造の生成と管理
-- FCC、BCC等の格子生成
-- 原子座標の計算
+#### 1. `config.py` - Configuration
+- Central place for settings used across the project
+- Define constants, paths and parameters
+- Allow environment-specific overrides
 
-### 3. `modules/simulation.py` - シミュレーション
-- シミュレーションの実行制御
-- OpenMMとのインターフェース
-- データ収集
+#### 2. `common/crystal_structure.py` - Crystal structure
+- Generate and manage crystal lattices (FCC, BCC, etc.)
+- Compute atomic positions and box vectors
 
-### 4. `modules/analysis.py` - 解析
-- 結果の統計処理
-- データの可視化
-- ファイル出力
+#### 3. `common/analysis.py` - Analysis
+- Statistical processing of results
+- Visualization and file output
 
-### 5. `modules/utils.py` - ユーティリティ
-- ロギング設定
-- 共通関数
-- ヘルパー関数
+#### 4. `common/utils.py` - Utilities
+- Logging setup
+- Common helper functions
 
-## 設計原則
+#### 5. `common/mol_utils.py` - Molecular graph utilities
+- Graph-based molecule detection under PBC
+- Graph isomorphism matching
+- Coordinate unwrapping and transformations
+- Shared by all CIF conversion tools
 
-### 1. 関心の分離
-各モジュールは明確な責任を持ち、独立して機能します。
+### Simulation Engines
 
-### 2. 設定の一元管理
-`config.py`で設定を一元管理し、変更を容易にします。
+#### `engines/base.py` - Base simulator interface
+- Abstract base class for all simulation engines
+- Common methods: setup(), run(), record_data()
+- Engine-specific abstract methods: setup_system(), run_dynamics(), etc.
 
-### 3. テスタビリティ
-各モジュールは独立してテスト可能な設計です。
+#### `engines/openmm/` - OpenMM engine
+- **`simulator.py`**: OpenMM MD simulation implementation
+- **`cif2gro.py`**: CIF → GROMACS GRO converter with consistent atom ordering
+- **`build_top.py`**: GROMACS topology file generator
 
-### 4. 可読性
-- 明確な命名規則
-- 適切なドキュメンテーション
-- 一貫したコードスタイル
+#### `engines/pycharmm/` - pyCHARMM engine
+- **`simulator.py`**: pyCHARMM MD simulation implementation
+- **`cif2crd.py`**: CIF → CHARMM CRD/PDB/mol2 converter
+- **`build_psf.py`**: CHARMM PSF topology generator
 
-### 5. パス管理
-絶対パスではなく、`Path`オブジェクトを使用して移植性を確保します。
+### Tool Architecture
 
-## 実行フロー
+The CIF conversion tools (`cif2gro.py`, `cif2crd.py`) share a common architecture:
 
-```
-main.py
-  ↓
-1. 設定読み込み (config.py)
-  ↓
-2. ディレクトリ確認
-  ↓
-3. 結晶構造生成 (crystal_structure.py)
-  ↓
-4. シミュレーション実行 (simulation.py)
-  ↓
-5. 結果解析 (analysis.py)
-  ↓
-6. データ保存・可視化
-```
+1. **Input**: CIF file with crystal structure
+2. **Graph detection**: Build covalent bond graph → identify molecules
+3. **Template ordering**: Create deterministic atom order for first molecule
+4. **Isomorphism matching**: Map all molecules to template using graph isomorphism
+5. **RMSD disambiguation**: Handle symmetric molecules via Kabsch alignment
+6. **Coordinate processing**: Unwrap, recenter, wrap as needed
+7. **Output**: Write in target format (GRO, CRD, PDB, mol2, etc.)
 
-## 拡張方法
+This ensures **consistent atom ordering** across all molecule copies, which is critical for:
+- Proper topology application
+- Energy conservation in MD simulations
+- Trajectory analysis
 
-### 新しい機能の追加
-1. `src/modules/`に新しいモジュールを追加
-2. `main.py`から呼び出し
-3. 対応するテストを`tests/`に追加
+## Design principles
 
-### 設定の追加
-1. `config.py`に新しい設定を追加
-2. 必要に応じて環境変数や設定ファイルから読み込み
+### 1. Separation of concerns
+Each module has a clear responsibility and can operate independently.
 
-### データ処理の追加
-1. `modules/analysis.py`に新しい解析関数を追加
-2. または新しい解析モジュールを作成
+### 2. Centralized configuration
+Use `config.py` to centralize settings for easy modification.
+
+### 3. Testability
+Modules are designed to be independently testable.
+
+### 4. Readability
+- Clear naming conventions
+- Adequate documentation
+- Consistent code style
+
+### 5. Path handling
+Use `Path` objects instead of hard-coded absolute paths for portability.
+
+## Execution flow
+
+1. Load configuration (`config.py`)
+2. Ensure directories exist
+3. Generate crystal structure (`common/crystal_structure.py`)
+4. Run simulation (engine-specific simulator)
+5. Analyze results (`common/analysis.py`)
+6. Save data and plots
+
+## Extending the project
+
+### Adding new features
+1. Add a new module under `src/common/` or `src/engines/`
+2. Invoke it from `main.py` as needed
+3. Add corresponding tests under `tests/`
+
+### Adding configuration
+1. Add new settings to `config.py`
+2. Optionally load from environment variables or a config file
+
+### Adding data processing
+1. Add new analysis functions to `common/analysis.py` or create a new analysis module
