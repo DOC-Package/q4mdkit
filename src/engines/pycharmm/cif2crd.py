@@ -136,6 +136,19 @@ def write_crd_supercell(path: str, atoms: Atoms, molecule_chunks: List[List[int]
             lines.append(line)
             atom_id += 1
     
+    # Add crystal/box information if present
+    # CHARMM extended CRD format supports crystal parameters at the end
+    cell = atoms.get_cell()
+    if cell is not None and not np.allclose(cell.lengths(), 0):
+        a, b, c = cell.lengths()
+        # Calculate angles (alpha, beta, gamma) in degrees
+        alpha = np.degrees(np.arccos(np.dot(cell[1], cell[2]) / (b * c)))
+        beta = np.degrees(np.arccos(np.dot(cell[0], cell[2]) / (a * c)))
+        gamma = np.degrees(np.arccos(np.dot(cell[0], cell[1]) / (a * b)))
+        
+        # Write crystal dimensions (format used by CHARMM)
+        lines.append(f"{a:20.10f}{b:20.10f}{c:20.10f}{alpha:20.10f}{beta:20.10f}{gamma:20.10f}")
+    
     with open(path, "w") as f:
         f.write("\n".join(lines) + "\n")
 
