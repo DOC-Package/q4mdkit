@@ -2,7 +2,7 @@
 QM/MM Configuration Module
 
 Load settings from YAML configuration file and provide factory functions
-for creating ASH theory objects (OpenMM, DFTB, QM/MM).
+for creating ASH theory objects.
 """
 
 import os
@@ -215,7 +215,7 @@ class QMMMConfig:
         print(f"  Periodic:        {self.periodic}")
 
 
-# Default configuration instance (lazy loading)
+# Default configuration instance
 _default_config = None
 
 def get_config(config_file=None):

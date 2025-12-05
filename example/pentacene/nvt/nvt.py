@@ -1,0 +1,36 @@
+from ash import *
+import os
+import sys
+sys.path.insert(0, os.path.abspath('../../../src'))
+from qmmm.qmmm_config import get_config
+from qmmm.md_config import get_md_config
+import mdtraj as md
+
+# Load configurations from parent directory
+qmmm_config = get_config("../qmmm_settings.yaml")
+md_config = get_md_config("../md_settings.yaml")
+
+# input: initial structure
+input_gro = "../input/pentacene.gro"
+
+# output directory
+output_dir = "output"
+os.makedirs(output_dir, exist_ok=True)
+
+print("="*60)
+print("  NVT Equilibration (300 K)  ")
+print("="*60)
+
+frag = Fragment(grofile=input_gro)
+qmatoms = qmmm_config.load_qmatoms()
+
+omm = qmmm_config.create_openmm_theory(grofile=input_gro)
+qm_dftb = qmmm_config.create_dftb_theory()
+qmmm = qmmm_config.create_qmmm_theory(frag, qmatoms, omm, qm_dftb)
+
+print("\nStarting NVT equilibration...")
+md_config.run_nvt(frag, qmmm, output_dir=output_dir)
+
+print("\nSaving final structure...")
+md_config.save_final_structure(output_dir=output_dir, prefix="nvt")
+
