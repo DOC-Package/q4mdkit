@@ -1,20 +1,51 @@
 # qm4dcrystal
 
 ## Introduction
-Wrapper for QM/MM molecular dynamics simulations of molecular crystals.
+Wrapper for QM/MM molecular dynamics simulations of molecular crystals using ASH.
+
+### QM/MM MD
+ASH employs OpenMM as a MD engine.
+
+## Configuration Files
+
+### qmmm_settings.yaml
+QM/MM calculation settings:
+- File paths (SK files, topology, coordinates)
+- QM region (charge, multiplicity, atom indices)
+- DFTB parameters (Slater-Koster files, Hubbard derivatives)
+- OpenMM settings (cutoff, platform, etc.)
+
+### md_settings.yaml
+MD simulation settings:
+- Timestep, trajectory frequency
+- NVT: temperature, coupling frequency, integrator
+- NPT: pressure, barostat, barostat frequency, integrator
+- NVE: integrator
+- Simulation times for each ensemble
+
+## Quick Start
+
+```python
+from ash import *
+from qmmm.qmmm_config import get_config
+from qmmm.md_config import get_md_config
+
+# Load configurations
+qmmm_config = get_config("qmmm_settings.yaml")
+md_config = get_md_config("md_settings.yaml")
+
+# Setup QM/MM
+frag = Fragment(grofile="input.gro")
+qmatoms = qmmm_config.load_qmatoms()
+qmmm = qmmm_config.create_qmmm_theory(frag, qmatoms)
+
+# Run MD
+md_config.run_nvt(frag, qmmm)
+md_config.run_npt(frag, qmmm)
+md_config.run_nve(frag, qmmm)
+```
 
 ## Installation
-
-```bash
-# Install dependencies
-pip install -r requirements.txt
-
-# Add bin directory to PATH (optional, for convenience)
-export PATH="/home/takahashi/python/mdcrystal/bin:$PATH"
-
-# Or source the tools.sh file to use aliases
-source tools.sh
-```
 
 ## Usage
 
@@ -26,51 +57,6 @@ cif2gro --cif pentacene.cif --supercell 3 3 3 --out pentacene.gro
 buildtop --gro pentacene.gro --itp pentacene.itp --nmol 27 --out topol.top
 ```
 
-## Simulation engines
-
-This project supports both OpenMM and pyCHARMM.
-
-- **OpenMM**: a fast, GPU-enabled MD engine
-
-Select the engine via the `SIMULATION_ENGINE` variable in `src/config.py`.
-The common interface allows using the same workflow with either engine.
-
 ## Molecular Crystal Conversion Tools
 
 This project includes tools for converting molecular crystal structures (CIF format) to simulation-ready formats:
-
-### Quick Start
-
-```bash
-# Convert CIF to GROMACS GRO (3x3x3 supercell)
-python src/engines/openmm/cif2gro.py \
-    --cif input.cif \
-    --super 3 3 3 \
-    --out output.gro \
-    --template-pdb template.pdb
-
-# Generate GROMACS topology
-python src/engines/openmm/build_top.py output.gro --itp molecule.itp
-
-# Convert CIF to CHARMM formats
-python src/engines/pycharmm/cif2crd.py \
-    --cif input.cif \
-    --supercell 3 3 3
-```
-
-### Key Features
-
-- **Consistent atom ordering**: All molecule copies have identical internal atom order
-- **Graph-based detection**: Uses covalent bonding under periodic boundaries
-- **RMSD disambiguation**: Handles symmetric molecules correctly
-- **Multiple formats**: Supports GROMACS (GRO/TOP) and CHARMM (CRD/PDB/mol2/PSF)
-
-See [docs/tools.md](docs/tools.md) for comprehensive documentation.
-
----
-
-## Development
-```bash
-# Run tests
-python -m pytest tests/
-```
