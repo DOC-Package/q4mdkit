@@ -10,19 +10,11 @@ from ase.io import write as ase_write
 from pymatgen.core import Structure
 from pymatgen.io.ase import AseAtomsAdaptor
 
-# Import from common module using relative import
-try:
-    from ...common.mol_utils import (
-        build_graph, split_molecules_pbc, unwrap_to_single_image, recenter_system, 
-        wrap_to_box, deterministic_template_order, best_isomorphism
-    )
-except ImportError:
-    # Fallback for direct script execution
-    sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
-    from common.mol_utils import (
-        build_graph, split_molecules_pbc, unwrap_to_single_image, recenter_system, 
-        wrap_to_box, deterministic_template_order, best_isomorphism
-    )
+# Import from same directory
+from .mol_utils import (
+    build_graph, split_molecules_pbc, unwrap_to_single_image, recenter_system, 
+    wrap_to_box, deterministic_template_order, best_isomorphism
+)
 
 def gro_box_line(cell: np.ndarray) -> str:
     """Return a GRO 9-field triclinic box line in nm. See CIF2GRO_USAGE.md for details."""
@@ -81,6 +73,123 @@ def write_gro(path: str, atoms: Atoms, molecule_chunks: List[List[int]], per_mol
         f.write("\n".join(lines) + ("" if lines[-1].endswith("\n") else "\n"))
 
 
+def cif_to_gro(cif_file: str, output_gro: str = None, supercell: Tuple[int, int, int] = (1, 1, 1),
+               bond_scale: float = 1.10, resname: str = "MOL", recenter: bool = True, 
+               wrap: bool = True, template_pdb: str = None) -> str:
+    """
+    Convert CIF file to GROMACS GRO format with consistent per-molecule atom ordering.
+    
+    Args:
+        cif_file: Path to input CIF file
+        output_gro: Path to output GRO file (default: <cif_basename>.gro)
+        supercell: Supercell repeats as (nx, ny, nz) tuple
+        bond_scale: Covalent radii scale factor for bond detection
+        resname: Residue name in GRO file
+        recenter: Whether to recenter system to form a compact cluster
+        wrap: Whether to wrap molecules back into the simulation box
+        template_pdb: Path to write template molecule PDB (default: <cif_basename>_template.pdb)
+    
+    Returns:
+        str: Path to the generated GRO file
+    """
+    cif_path = Path(cif_file)
+    cif_basename = cif_path.stem
+    
+    # Set default output filenames
+    if output_gro is None:
+        output_gro = str(cif_path.parent / f"{cif_basename}.gro")
+    if template_pdb is None:
+        template_pdb = str(cif_path.parent / f"{cif_basename}_template.pdb")
+    
+    # Load CIF file
+    try:
+        atoms = read(cif_file)
+        print(f"[INFO] Successfully loaded CIF with ASE: {cif_file}")
+    except Exception as e1:
+        print(f"[WARN] Failed to read CIF with ASE: {e1}")
+        try:
+            s = Structure.from_file(cif_file)
+            atoms = AseAtomsAdaptor.get_atoms(s)
+            print(f"[INFO] Loaded CIF with pymatgen: {cif_file}")
+        except Exception as e2:
+            raise Exception(f"[ERROR] Could not load CIF file with either ASE or pymatgen: {e2}")
+    
+    # Make supercell if needed
+    nx, ny, nz = supercell
+    if (nx, ny, nz) != (1, 1, 1):
+        from ase.build import make_supercell
+        S = np.diag([nx, ny, nz])
+        atoms = make_supercell(atoms, S)
+        print(f"[INFO] Created {nx}x{ny}x{nz} supercell")
+    
+    # Identify molecules (connected components under PBC)
+    comps = split_molecules_pbc(atoms, scale=bond_scale)
+    print(f"[INFO] Detected {len(comps)} molecules")
+    if len(comps) == 1:
+        print("[WARN] Detected a single connected component. This may not be a molecular crystal.")
+    
+    # Deterministic molecule ordering
+    spos = atoms.get_scaled_positions()
+    cell = atoms.get_cell()
+    def frac_com(idxs):
+        f = np.mean(spos[idxs], axis=0)
+        return np.mod(f, 1.0)
+    order_mols = sorted(range(len(comps)), key=lambda i: tuple(frac_com(comps[i])))
+    comps = [comps[i] for i in order_mols]
+    
+    # Unwrap each molecule into one image
+    unwrapped_positions = []
+    all_numbers = atoms.numbers.copy()
+    for idxs in comps:
+        pos = unwrap_to_single_image(atoms, idxs)  # Å
+        unwrapped_positions.append(pos)
+    
+    # Recenter system to form a compact cluster
+    if recenter:
+        print("[INFO] Recentering system to form a compact cluster...")
+        unwrapped_positions = recenter_system(unwrapped_positions, np.array(atoms.get_cell()))
+    
+    # Wrap back into box
+    if wrap:
+        print("[INFO] Wrapping molecules back into the simulation box...")
+        unwrapped_positions = wrap_to_box(unwrapped_positions, np.array(atoms.get_cell()))
+    
+    positions = unwrapped_positions
+    
+    # Build template order for molecule 0
+    idxs0 = comps[0]
+    mol0 = Atoms(numbers=all_numbers[idxs0], positions=positions[0])
+    G0 = build_graph(mol0, scale=bond_scale)
+    template_local_order = deterministic_template_order(G0, mol0, list(range(len(idxs0))))
+    
+    # Prepare per-molecule reorder maps
+    per_mol_orders: Dict[int, List[int]] = {}
+    per_mol_orders[0] = template_local_order
+    
+    # For other molecules: find isomorphism mapping to template
+    for mi in range(1, len(comps)):
+        idxs_i = comps[mi]
+        mol_i = Atoms(numbers=all_numbers[idxs_i], positions=positions[mi])
+        mapping = best_isomorphism(mol_i, mol0, list(range(len(idxs_i))), list(range(len(idxs0))), scale=bond_scale)
+        inv = {v: k for k, v in mapping.items()}
+        order_src_local = [inv[j] for j in template_local_order]
+        per_mol_orders[mi] = order_src_local
+    
+    # Write GRO file
+    write_gro(output_gro, atoms, comps, per_mol_orders, positions, resid_name=resname)
+    print(f"[OK] Wrote GRO with consistent per-molecule atom order: {output_gro}")
+    
+    # Write template molecule PDB
+    order0 = per_mol_orders[0]
+    idxs_ordered = [idxs0[i] for i in order0]
+    tpl_positions = positions[0][order0]
+    tpl_symbols = [atoms.get_chemical_symbols()[idxs_ordered[i]] for i in range(len(order0))]
+    write_template_pdb(template_pdb, tpl_symbols, tpl_positions, resname=resname)
+    print(f"[OK] Wrote template molecule PDB: {template_pdb}")
+    
+    return output_gro
+
+
 # ----------------------------- main -----------------------------------
 def main():
     ap = argparse.ArgumentParser(description="Convert CIF to GROMACS GRO with consistent per-molecule atom ordering")
@@ -93,95 +202,15 @@ def main():
     ap.add_argument("--no-wrap", action="store_true", help="Disable wrapping (enabled by default)")
     args = ap.parse_args()
     
-    # Generate default output filenames from input CIF basename
-    cif_basename = Path(args.cif).stem  
-    fout = f"{cif_basename}.gro"
-    ftemp = f"{cif_basename}_template.pdb"
-    args.recenter = not args.no_recenter
-    args.wrap = not args.no_wrap
-
-    try:
-        atoms = read(args.cif)
-        print(f"[INFO] Successfully loaded with ASE")
-    except Exception as e1:
-        print(f"[ERROR] Failed to read CIF with ASE: {e1}", file=sys.stderr)
-        try:
-            s = Structure.from_file(args.cif)
-            atoms = AseAtomsAdaptor.get_atoms(s)
-            print(f"[INFO] Loaded with pymatgen")
-        except Exception as e2:
-            print(f"[ERROR] Failed to read CIF with pymatgen: {e2}", file=sys.stderr)
-            sys.exit(1)
-        raise Exception("[ERROR] Could not load CIF file with either ASE or pymatgen")
-
-    # Make supercell if needed
-    nx, ny, nz = args.supercell
-    if (nx, ny, nz) != (1,1,1):
-        from ase.build import make_supercell
-        S = np.diag([nx, ny, nz])
-        atoms = make_supercell(atoms, S)
-
-    # Identify molecules (connected components under PBC)
-    comps = split_molecules_pbc(atoms, scale=args.bond_scale)
-    if len(comps) == 1:
-        print("[WARN] Detected a single connected component. This may not be a molecular crystal.")
-
-    # Deterministic molecule ordering
-    spos = atoms.get_scaled_positions()
-    cell = atoms.get_cell()
-    def frac_com(idxs):
-        f = np.mean(spos[idxs], axis=0)
-        return np.mod(f, 1.0)
-    order_mols = sorted(range(len(comps)), key=lambda i: tuple(frac_com(comps[i])))
-    comps = [comps[i] for i in order_mols]
-
-    # Unwrap each molecule into one image and build a new Atoms in that geometry order
-    unwrapped_positions = []
-    all_numbers = atoms.numbers.copy()
-    for idxs in comps:
-        pos = unwrap_to_single_image(atoms, idxs)  # Å
-        unwrapped_positions.append(pos)
-
-    # Recenter system to form a compact cluster
-    if args.recenter:
-        print("[INFO] Recentering system to form a compact cluster...")
-        unwrapped_positions = recenter_system(unwrapped_positions, np.array(atoms.get_cell()))
-
-    # Wrap back into box
-    if args.wrap:
-        print("[INFO] Wrapping molecules back into the simulation box...")
-        unwrapped_positions = wrap_to_box(unwrapped_positions, np.array(atoms.get_cell()))
-
-    positions = unwrapped_positions
-    # Build template order for molecule 0
-    idxs0 = comps[0]
-    mol0 = Atoms(numbers=all_numbers[idxs0], positions=positions[0])
-    G0 = build_graph(mol0, scale=args.bond_scale)
-    template_local_order = deterministic_template_order(G0, mol0, list(range(len(idxs0))))
-
-    # Prepare per-molecule reorder maps (local -> desired local)
-    per_mol_orders: Dict[int, List[int]] = {}
-    per_mol_orders[0] = template_local_order
-
-    # For other molecules: find isomorphism mapping to template and convert to template order
-    for mi in range(1, len(comps)):
-        idxs_i = comps[mi]
-        mol_i = Atoms(numbers=all_numbers[idxs_i], positions=positions[mi])
-        mapping = best_isomorphism(mol_i, mol0, list(range(len(idxs_i))), list(range(len(idxs0))), scale=args.bond_scale)
-        # mapping: src_local -> ref_local ; we need to produce order of src locals that yields ref order template_local_order
-        inv = {v:k for k,v in mapping.items()}  # ref_local -> src_local
-        order_src_local = [inv[j] for j in template_local_order]
-        per_mol_orders[mi] = order_src_local
-    write_gro(fout, atoms, comps, per_mol_orders, positions, resid_name=args.resname)
-    print(f"[OK] Wrote GRO with consistent per-molecule atom order: {fout}")
-
-    # Write a single template molecule as PDB in the chosen order
-    order0 = per_mol_orders[0]
-    idxs_ordered = [idxs0[i] for i in order0]
-    tpl_positions = positions[0][order0]
-    tpl_symbols = [atoms.get_chemical_symbols()[idxs_ordered[i]] for i in range(len(order0))]
-    write_template_pdb(ftemp, tpl_symbols, tpl_positions, resname=args.resname)
-    print(f"[OK] Wrote template molecule PDB: {ftemp}")
+    cif_to_gro(
+        cif_file=args.cif,
+        output_gro=args.out,
+        supercell=tuple(args.supercell),
+        bond_scale=args.bond_scale,
+        resname=args.resname,
+        recenter=not args.no_recenter,
+        wrap=not args.no_wrap
+    )
 
 if __name__ == "__main__":
     main()

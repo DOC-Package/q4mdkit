@@ -1,0 +1,15 @@
+# MD Settings Configuration File
+
+# MD parameters
+md:
+  timestep: 0.001          # ps (1.0 fs)
+  traj_frequency: 50       # steps
+  nvt:
+    temperature: 300.0       # K
+    coupling_frequency: 1.0  # ps
+  simulation_time: 1.0       # ps
+
+# Output settings
+output:
+  directory: "output"
+  save_gro: true
