@@ -43,17 +43,15 @@ class MDConfig:
             # Backward compatibility: single integrator for all
             self.nvt_integrator = integrators
             self.npt_integrator = integrators
-            self.nve_integrator = 'VelocityVerletIntegrator'
+            self.nve_integrator = 'VerletIntegrator'
         else:
             self.nvt_integrator = integrators.get('nvt', 'LangevinMiddleIntegrator')
             self.npt_integrator = integrators.get('npt', 'LangevinMiddleIntegrator')
-            self.nve_integrator = integrators.get('nve', 'VelocityVerletIntegrator')
+            self.nve_integrator = integrators.get('nve', 'VerletIntegrator')
         
         # NVT settings (temperature, coupling_frequency)
         nvt_settings = md_settings.get('nvt', {})
-        if 'temperature' not in nvt_settings:
-            raise ValueError("Temperature must be specified in md.nvt.temperature")
-        self.temperature = nvt_settings['temperature']  # K
+        self.temperature = nvt_settings.get('temperature', None)  # K (required for NVT/NPT)
         self.coupling_frequency = nvt_settings.get('coupling_frequency', 1)  # 1/ps
         
         # NPT settings (barostat, pressure, barostat_frequency)
@@ -64,9 +62,15 @@ class MDConfig:
         
         # MD simulation times for each phase
         md_times = md_settings.get('simulation_time', {})
-        self.nvt_time = md_times.get('nvt', 100.0)  # ps
-        self.npt_time = md_times.get('npt', 100.0)  # ps
-        self.nve_time = md_times.get('nve', 100.0)  # ps
+        if isinstance(md_times, (int, float)):
+            # Single value: use for all ensembles
+            self.nvt_time = float(md_times)
+            self.npt_time = float(md_times)
+            self.nve_time = float(md_times)
+        else:
+            self.nvt_time = md_times.get('nvt', 100.0)  # ps
+            self.npt_time = md_times.get('npt', 100.0)  # ps
+            self.nve_time = md_times.get('nve', 100.0)  # ps
         
         # Output settings
         output = config.get('output', {})
@@ -93,7 +97,7 @@ class MDConfig:
         print(f"  NPT time:        {self.npt_time} ps")
         print(f"  NVE time:        {self.nve_time} ps")
     
-    def run_nvt(self, frag, theory, output_dir=None, simulation_time=None):
+    def run_nvt(self, frag, theory, output_dir=None, simulation_time=None, statefile=None):
         """
         Run NVT equilibration.
         
@@ -102,11 +106,16 @@ class MDConfig:
             theory: Theory object (QMMMTheory or OpenMMTheory).
             output_dir: Output directory path. If None, uses config value.
             simulation_time: Simulation time in ps. If None, uses config value.
+            statefile: Path to OpenMM state XML file to load initial state from.
+                      If provided, positions and velocities are loaded from this file.
         
         Returns:
             None
         """
         from ash import OpenMM_MD
+        
+        if self.temperature is None:
+            raise ValueError("Temperature must be specified in md.nvt.temperature for NVT simulation")
         
         if output_dir is None:
             output_dir = self.output_dir
@@ -125,10 +134,11 @@ class MDConfig:
             integrator=self.nvt_integrator,
             traj_frequency=self.traj_frequency,
             trajfilename=f"{output_dir}/nvt",
-            datafilename=f"{output_dir}/nvt.txt"
+            datafilename=f"{output_dir}/nvt.txt",
+            statefile=statefile
         )
     
-    def run_npt(self, frag, theory, output_dir=None, simulation_time=None):
+    def run_npt(self, frag, theory, output_dir=None, simulation_time=None, statefile=None):
         """
         Run NPT equilibration.
         
@@ -137,11 +147,16 @@ class MDConfig:
             theory: Theory object (QMMMTheory or OpenMMTheory).
             output_dir: Output directory path. If None, uses config value.
             simulation_time: Simulation time in ps. If None, uses config value.
+            statefile: Path to OpenMM state XML file to load initial state from.
+                      If provided, positions and velocities are loaded from this file.
         
         Returns:
             None
         """
         from ash import OpenMM_MD
+        
+        if self.temperature is None:
+            raise ValueError("Temperature must be specified in md.nvt.temperature for NPT simulation")
         
         if output_dir is None:
             output_dir = self.output_dir
@@ -162,10 +177,11 @@ class MDConfig:
             integrator=self.npt_integrator,
             traj_frequency=self.traj_frequency,
             trajfilename=f"{output_dir}/npt",
-            datafilename=f"{output_dir}/npt.txt"
+            datafilename=f"{output_dir}/npt.txt",
+            statefile=statefile
         )
     
-    def run_nve(self, frag, theory, output_dir=None, simulation_time=None):
+    def run_nve(self, frag, theory, output_dir=None, simulation_time=None, statefile=None):
         """
         Run NVE production.
         
@@ -174,6 +190,9 @@ class MDConfig:
             theory: Theory object (QMMMTheory or OpenMMTheory).
             output_dir: Output directory path. If None, uses config value.
             simulation_time: Simulation time in ps. If None, uses config value.
+            statefile: Path to OpenMM state XML file to load initial state from.
+                      If provided, positions and velocities are loaded from this file.
+                      Note: For NVE from NPT, use remove_montecarlo_params() first.
         
         Returns:
             None
@@ -195,7 +214,8 @@ class MDConfig:
             integrator=self.nve_integrator,
             traj_frequency=self.traj_frequency,
             trajfilename=f"{output_dir}/nve",
-            datafilename=f"{output_dir}/nve.txt"
+            datafilename=f"{output_dir}/nve.txt",
+            statefile=statefile
         )
     
     def save_final_structure(self, output_dir=None, prefix="md"):

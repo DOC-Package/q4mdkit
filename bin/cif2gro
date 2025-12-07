@@ -10,7 +10,7 @@ sys.path.insert(0, str(project_root / "src"))
 
 # Import and run the actual script
 if __name__ == "__main__":
-    tool_path = project_root / "src" / "prep" / "gro" / "cif2gro.py"
+    tool_path = project_root / "src" / "prep" / "cif2gro.py"
     with open(tool_path) as f:
         code = compile(f.read(), tool_path, 'exec')
         exec(code)

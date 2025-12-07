@@ -1,0 +1,17 @@
+; GROMACS topology file for pentacene crystal
+; Generated for QM/MM simulations
+
+[ defaults ]
+; nbfunc        comb-rule       gen-pairs       fudgeLJ fudgeQQ
+1               3               yes             0.5     0.5
+
+; Include forcefield parameters
+#include "pentacene.itp"
+
+[ system ]
+; Name
+Pentacene Crystal
+
+[ molecules ]
+; Compound        #mols
+MOL               54

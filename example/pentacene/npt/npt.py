@@ -11,7 +11,9 @@ qmmm_config = get_config("../qmmm_settings.yaml")
 md_config = get_md_config("md_settings.yaml")
 
 # input: initial structure
-input_gro = "../input/pentacene.gro"
+input_gro = "../nvt/output/nvt_lastframe.gro"
+input_pdb = "../nvt/output/nvt_lastframe.pdb"
+state_xml = "../nvt/OpenMM_MD_final_state.xml"
 
 # output directory
 output_dir = "output"
@@ -21,7 +23,7 @@ print("="*60)
 print("  NVT Equilibration (300 K)  ")
 print("="*60)
 
-frag = Fragment(grofile=input_gro)
+frag = Fragment(pdbfile=input_pdb)
 qmatoms = qmmm_config.load_qmatoms()
 
 omm = qmmm_config.create_openmm_theory(grofile=input_gro)
@@ -29,8 +31,8 @@ qm_dftb = qmmm_config.create_dftb_theory()
 qmmm = qmmm_config.create_qmmm_theory(frag, qmatoms, omm, qm_dftb)
 
 print("\nStarting NVT equilibration...")
-md_config.run_nvt(frag, qmmm, output_dir=output_dir)
+md_config.run_npt(frag, qmmm, output_dir=output_dir, statefile=state_xml)
 
 print("\nSaving final structure...")
-md_config.save_final_structure(output_dir=output_dir, prefix="nvt")
+md_config.save_final_structure(output_dir=output_dir, prefix="npt")
 
