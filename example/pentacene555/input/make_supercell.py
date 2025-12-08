@@ -12,6 +12,6 @@ input_dir = Path(__file__).parent
 cif_to_gro(
     cif_file=str(input_dir / "pentacene.cif"),
     output_gro=str(input_dir / "pentacene.gro"),
-    supercell=(4, 4, 4),
+    supercell=(5, 5, 5),
     resname="PEN"
 )

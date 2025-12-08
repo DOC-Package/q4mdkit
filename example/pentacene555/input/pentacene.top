@@ -1,4 +1,4 @@
-; Topology file for Pentacene 4x4x4 supercell
+; Topology file for Pentacene Crystal
     ; Generated from /home/takahashi/python/qm4dcrystal/example/pentacene444/input/pentacene.gro
 
     ; Include forcefield
@@ -8,9 +8,9 @@
     #include "pentacene.itp"
 
     [ system ]
-    Pentacene 4x4x4 supercell
+    Pentacene Crystal
 
     [ molecules ]
     ; Compound        #mols
-    PEN               128
+    PEN               250
     
