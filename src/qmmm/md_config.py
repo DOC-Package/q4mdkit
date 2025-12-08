@@ -75,7 +75,7 @@ class MDConfig:
         # Output settings
         output = config.get('output', {})
         self.output_dir = output.get('directory', 'output')
-        self.save_gro = output.get('save_gro', True)
+        self.save_gro = output.get('save_gro', False)
     
     def print_config(self):
         """Print MD configuration summary."""

@@ -35,9 +35,14 @@ class QMMMConfig:
         # File paths
         paths = config.get('paths', {})
         self.sk_dir = paths.get('sk_dir', '')
-        self.gromacs_top_dir = paths.get('gromacs_top_dir', '')
-        self.gromacs_top_file = paths.get('gromacs_top_file', '')
-        self.grofile = paths.get('grofile', '')
+        # AMBER topology files
+        self.amber_prmtop = paths.get('amber_prmtop', '')
+        self.amber_inpcrd = paths.get('amber_inpcrd', '')
+        # PDB file for coordinates (optional, can override inpcrd coordinates)
+        self.pdbfile = paths.get('pdbfile', '')
+        # Box file for PBC dimensions
+        self.boxfile = paths.get('boxfile', None)
+        # Atom selection files
         self.qatoms_file = paths.get('qatoms', '')
         self.actatoms_file = paths.get('actatoms', '')
         
@@ -64,10 +69,46 @@ class QMMMConfig:
         openmm = config.get('openmm', {})
         self.periodic = openmm.get('periodic', True)
         self.periodic_nonbonded_cutoff = openmm.get('periodic_nonbonded_cutoff', 9.0)
+        self.periodic_cell_dimensions = openmm.get('periodic_cell_dimensions', None)
+        self.use_boxfile = openmm.get('use_boxfile', False)
         self.autoconstraints = openmm.get('autoconstraints', None)
         self.rigidwater = openmm.get('rigidwater', False)
         self.hydrogenmass = openmm.get('hydrogenmass', 1.5)
         self.platform = openmm.get('platform', 'CPU')
+        
+        # Validate: both periodic_cell_dimensions and use_boxfile cannot be set
+        if self.periodic_cell_dimensions is not None and self.use_boxfile:
+            raise ValueError(
+                "Cannot specify both 'periodic_cell_dimensions' and 'use_boxfile: true'. "
+                "Please use only one method to define the PBC box."
+            )
+        
+        # Load box from file if use_boxfile is True
+        if self.use_boxfile:
+            if not self.boxfile:
+                raise ValueError(
+                    "'use_boxfile' is true but 'boxfile' path is not set in paths section."
+                )
+            self.periodic_cell_dimensions = self._load_boxfile(self.boxfile)
+    
+    def _load_boxfile(self, boxfile):
+        """
+        Load PBC box parameters from file.
+        
+        Args:
+            boxfile: Path to box file (format: a b c alpha beta gamma)
+        
+        Returns:
+            list: [a, b, c, alpha, beta, gamma]
+        """
+        with open(boxfile, 'r') as f:
+            for line in f:
+                line = line.strip()
+                if line and not line.startswith('#'):
+                    values = [float(x) for x in line.split()]
+                    if len(values) == 6:
+                        return values
+        return None
     
     def load_qmatoms(self, filename=None):
         """
@@ -103,28 +144,34 @@ class QMMMConfig:
         with open(filename, 'r') as f:
             return [int(x) for x in f.read().strip().split()]
     
-    def create_openmm_theory(self, grofile=None):
+    def create_openmm_theory(self, prmtopfile=None, inpcrdfile=None, periodic_cell_dimensions=None):
         """
-        Create OpenMMTheory object.
+        Create OpenMMTheory object using AMBER topology files.
         
         Args:
-            grofile: Path to GRO file. If None, uses the path from config.
+            prmtopfile: Path to AMBER prmtop file. If None, uses the path from config.
+            inpcrdfile: Path to AMBER inpcrd file. If None, uses the path from config.
+            periodic_cell_dimensions: [a, b, c, alpha, beta, gamma] in Angstrom/degrees.
+                                      If None, uses the value from config.
         
         Returns:
             OpenMMTheory: Configured OpenMM theory object.
         """
         from ash import OpenMMTheory
         
-        if grofile is None:
-            grofile = self.grofile
+        if prmtopfile is None:
+            prmtopfile = self.amber_prmtop
+        if inpcrdfile is None:
+            inpcrdfile = self.amber_inpcrd
+        if periodic_cell_dimensions is None:
+            periodic_cell_dimensions = self.periodic_cell_dimensions
         
         return OpenMMTheory(
-            GROMACSfiles=True,
-            gromacstopdir=self.gromacs_top_dir,
-            gromacstopfile=self.gromacs_top_file,
-            grofile=grofile,
+            Amberfiles=True,
+            amberprmtopfile=prmtopfile,
             periodic=self.periodic,
             periodic_nonbonded_cutoff=self.periodic_nonbonded_cutoff,
+            periodic_cell_dimensions=periodic_cell_dimensions,
             autoconstraints=self.autoconstraints,
             rigidwater=self.rigidwater,
             hydrogenmass=self.hydrogenmass,
@@ -205,14 +252,19 @@ class QMMMConfig:
         """Print current configuration summary."""
         print(f"\nQM/MM Configuration ({self.config_file}):")
         print(f"  SK directory:    {self.sk_dir}")
-        print(f"  GRO file:        {self.grofile}")
-        print(f"  Topology:        {self.gromacs_top_file}")
+        print(f"  AMBER prmtop:    {self.amber_prmtop}")
+        print(f"  AMBER inpcrd:    {self.amber_inpcrd}")
+        if self.pdbfile:
+            print(f"  PDB file:        {self.pdbfile}")
         print(f"  QM atoms file:   {self.qatoms_file}")
         print(f"  QM charge/mult:  {self.qm_charge}/{self.qm_mult}")
         print(f"  QM cores:        {self.numcores_qm}")
         print(f"  MM cores:        {self.numcores_mm}")
         print(f"  Platform:        {self.platform}")
         print(f"  Periodic:        {self.periodic}")
+        if self.periodic_cell_dimensions:
+            a, b, c, alpha, beta, gamma = self.periodic_cell_dimensions
+            print(f"  PBC Box:         a={a:.3f} b={b:.3f} c={c:.3f} α={alpha:.2f}° β={beta:.2f}° γ={gamma:.2f}°")
 
 
 # Default configuration instance
@@ -249,9 +301,9 @@ def load_active_atoms(filename=None):
     """Load active atom indices from file."""
     return get_config().load_active_atoms(filename)
 
-def create_openmm_theory(grofile=None):
-    """Create OpenMMTheory object."""
-    return get_config().create_openmm_theory(grofile)
+def create_openmm_theory(prmtopfile=None, inpcrdfile=None, periodic_cell_dimensions=None):
+    """Create OpenMMTheory object using AMBER topology."""
+    return get_config().create_openmm_theory(prmtopfile, inpcrdfile, periodic_cell_dimensions)
 
 def create_dftb_theory():
     """Create DFTBTheory object."""

@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 """
-Select two adjacent molecules closest to the center of the system from a GRO file.
+Select two adjacent molecules closest to the center of the system from a GRO or PDB file.
 Output atom indices to be used for the QM region.
 """
 
 import numpy as np
 import argparse
+from pathlib import Path
 
 
 def read_gro_file(grofile):
@@ -17,6 +18,7 @@ def read_gro_file(grofile):
         residues: numpy array (N,) - residue numbers
         box: numpy array (3,) - box dimensions (nm)
         natoms: int - total number of atoms
+        title: str - title from file
     """
     with open(grofile, 'r') as f:
         lines = f.readlines()
@@ -46,6 +48,73 @@ def read_gro_file(grofile):
     box = np.array([float(box_line[0]), float(box_line[1]), float(box_line[2])])
     
     return coords, residues, box, natoms, title
+
+
+def read_pdb_file(pdbfile):
+    """
+    Read a PDB file and return coordinates, residue numbers, and box information.
+    
+    Returns:
+        coords: numpy array (N, 3) - atomic coordinates (nm, converted from Angstrom)
+        residues: numpy array (N,) - residue numbers
+        box: numpy array (3,) - box dimensions (nm)
+        natoms: int - total number of atoms
+        title: str - title from file
+    """
+    with open(pdbfile, 'r') as f:
+        lines = f.readlines()
+    
+    coords = []
+    residues = []
+    title = "PDB file"
+    box = np.array([0.0, 0.0, 0.0])
+    
+    for line in lines:
+        if line.startswith("TITLE"):
+            title = line[10:].strip()
+        elif line.startswith("CRYST1"):
+            # CRYST1 record: a, b, c in Angstrom
+            a = float(line[6:15].strip())
+            b = float(line[15:24].strip())
+            c = float(line[24:33].strip())
+            # Convert to nm
+            box = np.array([a / 10.0, b / 10.0, c / 10.0])
+        elif line.startswith("ATOM") or line.startswith("HETATM"):
+            # PDB format: columns are fixed width
+            # Residue number: columns 23-26 (1-indexed)
+            # X: columns 31-38, Y: columns 39-46, Z: columns 47-54 (in Angstrom)
+            resnum = int(line[22:26].strip())
+            x = float(line[30:38].strip()) / 10.0  # Convert to nm
+            y = float(line[38:46].strip()) / 10.0
+            z = float(line[46:54].strip()) / 10.0
+            coords.append([x, y, z])
+            residues.append(resnum)
+    
+    coords = np.array(coords)
+    residues = np.array(residues)
+    natoms = len(coords)
+    
+    return coords, residues, box, natoms, title
+
+
+def read_structure_file(filepath):
+    """
+    Read a GRO or PDB file based on extension.
+    
+    Returns:
+        coords: numpy array (N, 3) - atomic coordinates (nm)
+        residues: numpy array (N,) - residue numbers
+        box: numpy array (3,) - box dimensions (nm)
+        natoms: int - total number of atoms
+        title: str - title from file
+    """
+    ext = Path(filepath).suffix.lower()
+    if ext == '.gro':
+        return read_gro_file(filepath)
+    elif ext == '.pdb':
+        return read_pdb_file(filepath)
+    else:
+        raise ValueError(f"Unsupported file format: {ext}. Use .gro or .pdb")
 
 
 def calculate_molecule_centers(coords, residues):
@@ -160,14 +229,14 @@ def write_atom_list(atom_indices, filename):
         f.write(' '.join(map(str, atom_indices)) + '\n')
 
 
-def select_qmatoms(grofile, n_molecules=2, n_active_molecules=None, 
+def select_qmatoms(structure_file, n_molecules=2, n_active_molecules=None, 
                    output="qmatoms", active_output="active_atoms", verbose=False,
                    distance_threshold=0.3, choice=None):
     """
     Select molecules near the center of the system for QM region.
     
     Args:
-        grofile: Input GRO file path
+        structure_file: Input GRO or PDB file path
         n_molecules: Number of molecules for QM region (default: 2)
         n_active_molecules: Number of molecules for active region (default: same as n_molecules)
         output: Output file for QM atom indices (default: "qmatoms")
@@ -183,9 +252,9 @@ def select_qmatoms(grofile, n_molecules=2, n_active_molecules=None,
     print("QM Region Selection: Selecting molecules near the center of the system")
     print("=" * 70)
     
-    # Read GRO file
-    print(f"\nReading: {grofile}")
-    coords, residues, box, natoms, title = read_gro_file(grofile)
+    # Read structure file (GRO or PDB)
+    print(f"\nReading: {structure_file}")
+    coords, residues, box, natoms, title = read_structure_file(structure_file)
     
     box_center = box / 2.0
     print(f"  Title: {title}")
@@ -317,9 +386,9 @@ def select_qmatoms(grofile, n_molecules=2, n_active_molecules=None,
 
 def main():
     parser = argparse.ArgumentParser(
-        description='Select molecules near the center from a GRO file to define QM region'
+        description='Select molecules near the center from a GRO or PDB file to define QM region'
     )
-    parser.add_argument('grofile', help='Input GRO file')
+    parser.add_argument('structure_file', help='Input GRO or PDB file')
     parser.add_argument('-n', '--nmolecules', type=int, default=2,
                         help='Number of molecules to select (default: 2)')
     parser.add_argument('--active-molecules', type=int, default=None,
@@ -335,7 +404,7 @@ def main():
     args = parser.parse_args()
     
     select_qmatoms(
-        grofile=args.grofile,
+        structure_file=args.structure_file,
         n_molecules=args.nmolecules,
         n_active_molecules=args.active_molecules,
         output=args.output,
