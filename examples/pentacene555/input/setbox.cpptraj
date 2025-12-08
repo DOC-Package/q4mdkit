@@ -1,0 +1,8 @@
+parm pentacene.prmtop
+trajin pentacene.inpcrd
+
+box x 18.826 y 23.141 z 43.327 alpha 76.75 beta 88.01 gamma 84.52
+
+trajout pentacene_box.inpcrd restart
+run
+quit
