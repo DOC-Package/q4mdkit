@@ -11,7 +11,6 @@ qmmm_config = get_config("../qmmm_settings.yaml")
 md_config = get_md_config("md_settings.yaml")
 
 # input: initial structure
-input_gro = "../nvt/output/nvt_lastframe.gro"
 input_pdb = "../nvt/output/nvt_lastframe.pdb"
 state_xml = "../nvt/OpenMM_MD_final_state.xml"
 
@@ -26,7 +25,7 @@ print("="*60)
 frag = Fragment(pdbfile=input_pdb)
 qmatoms = qmmm_config.load_qmatoms()
 
-omm = qmmm_config.create_openmm_theory(grofile=input_gro)
+omm = qmmm_config.create_openmm_theory()
 qm_dftb = qmmm_config.create_dftb_theory()
 qmmm = qmmm_config.create_qmmm_theory(frag, qmatoms, omm, qm_dftb)
 

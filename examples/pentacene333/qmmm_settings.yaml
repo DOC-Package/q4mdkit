@@ -6,7 +6,6 @@ paths:
   amber_prmtop: "/home/takahashi/python/qm4dcrystal/examples/pentacene333/input/pentacene.prmtop"
   pdbfile: "/home/takahashi/python/qm4dcrystal/examples/pentacene333/input/pentacene.pdb"
   qatoms: "/home/takahashi/python/qm4dcrystal/examples/pentacene333/input/qmatoms"
-  boxfile: "/home/takahashi/python/qm4dcrystal/examples/pentacene333/input/pentacene.box"
 
 # Parallel settings
 parallel:
@@ -34,7 +33,7 @@ dftb:
 openmm:
   periodic: true
   periodic_nonbonded_cutoff: 9.0
-  use_boxfile: true
+  use_boxfile: false
   autoconstraints: HBonds
   rigidwater: false
   hydrogenmass: 1.0
