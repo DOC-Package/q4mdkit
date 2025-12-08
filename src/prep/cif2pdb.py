@@ -64,12 +64,44 @@ def write_pdb_supercell(path: str, atoms: Atoms, molecule_chunks: List[List[int]
         f.write("\n".join(lines) + "\n")
 
 
+def cell_to_box_vectors(a, b, c, alpha, beta, gamma):
+    """
+    Convert cell parameters to box vectors for triclinic cells.
+    
+    Args:
+        a, b, c: Cell lengths in Angstrom
+        alpha, beta, gamma: Cell angles in degrees
+    
+    Returns:
+        numpy.ndarray: 3x3 box vectors [[ax, ay, az], [bx, by, bz], [cx, cy, cz]]
+    """
+    # Convert angles to radians
+    alpha_rad = np.radians(alpha)
+    beta_rad = np.radians(beta)
+    gamma_rad = np.radians(gamma)
+    
+    # Box vector a along x-axis
+    ax, ay, az = a, 0.0, 0.0
+    
+    # Box vector b in xy-plane
+    bx = b * np.cos(gamma_rad)
+    by = b * np.sin(gamma_rad)
+    bz = 0.0
+    
+    # Box vector c
+    cx = c * np.cos(beta_rad)
+    cy = c * (np.cos(alpha_rad) - np.cos(beta_rad) * np.cos(gamma_rad)) / np.sin(gamma_rad)
+    cz = np.sqrt(c**2 - cx**2 - cy**2)
+    
+    return np.array([[ax, ay, az], [bx, by, bz], [cx, cy, cz]])
+
+
 def write_box_file(path: str, atoms: Atoms):
     """
-    Write PBC box parameters to a separate file.
+    Write PBC box vectors to a file for triclinic cells.
     
-    Format: a b c alpha beta gamma (space-separated)
-    This can be read by simulation setup scripts.
+    Format: 3x3 matrix (each row is a box vector in Angstrom)
+    Also includes cell parameters as comments for reference.
     
     Args:
         path: Output file path
@@ -82,10 +114,14 @@ def write_box_file(path: str, atoms: Atoms):
     beta = np.degrees(np.arccos(np.dot(cell[0], cell[2]) / (a * c)))
     gamma = np.degrees(np.arccos(np.dot(cell[0], cell[1]) / (a * b)))
     
+    # Calculate box vectors
+    box_vectors = cell_to_box_vectors(a, b, c, alpha, beta, gamma)
+    
     with open(path, "w") as f:
-        f.write(f"# PBC Box parameters: a b c alpha beta gamma\n")
-        f.write(f"# Units: Angstrom, degrees\n")
-        f.write(f"{a:.6f} {b:.6f} {c:.6f} {alpha:.4f} {beta:.4f} {gamma:.4f}\n")
+        f.write(f"# PBC Box vectors (3x3 matrix, each row is a vector in Angstrom)\n")
+        f.write(f"# Cell parameters: a={a:.6f} b={b:.6f} c={c:.6f} alpha={alpha:.4f} beta={beta:.4f} gamma={gamma:.4f}\n")
+        for vec in box_vectors:
+            f.write(f"{vec[0]:.10f} {vec[1]:.10f} {vec[2]:.10f}\n")
 
 
 def write_crd_supercell(path: str, atoms: Atoms, molecule_chunks: List[List[int]], 

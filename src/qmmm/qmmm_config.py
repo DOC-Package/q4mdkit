@@ -83,32 +83,75 @@ class QMMMConfig:
                 "Please use only one method to define the PBC box."
             )
         
-        # Load box from file if use_boxfile is True
+        # Load box vectors from file if use_boxfile is True
         if self.use_boxfile:
             if not self.boxfile:
                 raise ValueError(
                     "'use_boxfile' is true but 'boxfile' path is not set in paths section."
                 )
-            self.periodic_cell_dimensions = self._load_boxfile(self.boxfile)
+            self.pbc_vectors = self._load_boxfile(self.boxfile)
+        else:
+            self.pbc_vectors = None
     
     def _load_boxfile(self, boxfile):
         """
-        Load PBC box parameters from file.
+        Load PBC box vectors from file.
         
         Args:
-            boxfile: Path to box file (format: a b c alpha beta gamma)
+            boxfile: Path to box file (format: 3x3 matrix, each row is a vector)
         
         Returns:
-            list: [a, b, c, alpha, beta, gamma]
+            list: [[ax, ay, az], [bx, by, bz], [cx, cy, cz]]
         """
+        vectors = []
         with open(boxfile, 'r') as f:
             for line in f:
                 line = line.strip()
                 if line and not line.startswith('#'):
                     values = [float(x) for x in line.split()]
-                    if len(values) == 6:
-                        return values
+                    if len(values) == 3:
+                        vectors.append(values)
+                    elif len(values) == 6:
+                        # Old format: a b c alpha beta gamma - convert to vectors
+                        a, b, c, alpha, beta, gamma = values
+                        return self._cell_to_box_vectors(a, b, c, alpha, beta, gamma)
+        if len(vectors) == 3:
+            return vectors
         return None
+    
+    @staticmethod
+    def _cell_to_box_vectors(a, b, c, alpha, beta, gamma):
+        """
+        Convert cell parameters to box vectors for triclinic cells.
+        
+        Args:
+            a, b, c: Cell lengths in Angstrom
+            alpha, beta, gamma: Cell angles in degrees
+        
+        Returns:
+            list: 3x3 box vectors [[ax, ay, az], [bx, by, bz], [cx, cy, cz]]
+        """
+        import numpy as np
+        
+        # Convert angles to radians
+        alpha_rad = np.radians(alpha)
+        beta_rad = np.radians(beta)
+        gamma_rad = np.radians(gamma)
+        
+        # Box vector a along x-axis
+        ax, ay, az = a, 0.0, 0.0
+        
+        # Box vector b in xy-plane
+        bx = b * np.cos(gamma_rad)
+        by = b * np.sin(gamma_rad)
+        bz = 0.0
+        
+        # Box vector c
+        cx = c * np.cos(beta_rad)
+        cy = c * (np.cos(alpha_rad) - np.cos(beta_rad) * np.cos(gamma_rad)) / np.sin(gamma_rad)
+        cz = np.sqrt(c**2 - cx**2 - cy**2)
+        
+        return [[ax, ay, az], [bx, by, bz], [cx, cy, cz]]
     
     def load_qmatoms(self, filename=None):
         """
@@ -144,15 +187,15 @@ class QMMMConfig:
         with open(filename, 'r') as f:
             return [int(x) for x in f.read().strip().split()]
     
-    def create_openmm_theory(self, prmtopfile=None, inpcrdfile=None, periodic_cell_dimensions=None):
+    def create_openmm_theory(self, prmtopfile=None, inpcrdfile=None, pbc_vectors=None):
         """
         Create OpenMMTheory object using AMBER topology files.
         
         Args:
             prmtopfile: Path to AMBER prmtop file. If None, uses the path from config.
             inpcrdfile: Path to AMBER inpcrd file. If None, uses the path from config.
-            periodic_cell_dimensions: [a, b, c, alpha, beta, gamma] in Angstrom/degrees.
-                                      If None, uses the value from config.
+            pbc_vectors: [[ax,ay,az], [bx,by,bz], [cx,cy,cz]] in Angstrom.
+                         If None, uses the value from config.
         
         Returns:
             OpenMMTheory: Configured OpenMM theory object.
@@ -163,15 +206,21 @@ class QMMMConfig:
             prmtopfile = self.amber_prmtop
         if inpcrdfile is None:
             inpcrdfile = self.amber_inpcrd
-        if periodic_cell_dimensions is None:
-            periodic_cell_dimensions = self.periodic_cell_dimensions
+        if pbc_vectors is None:
+            pbc_vectors = self.pbc_vectors
+        
+        # Print PBC vectors info
+        if pbc_vectors is not None:
+            print("Using PBC box vectors:")
+            for i, vec in enumerate(pbc_vectors):
+                print(f"  v{i+1}: [{vec[0]:.4f}, {vec[1]:.4f}, {vec[2]:.4f}]")
         
         return OpenMMTheory(
             Amberfiles=True,
             amberprmtopfile=prmtopfile,
             periodic=self.periodic,
             periodic_nonbonded_cutoff=self.periodic_nonbonded_cutoff,
-            periodic_cell_dimensions=periodic_cell_dimensions,
+            PBCvectors=pbc_vectors,
             autoconstraints=self.autoconstraints,
             rigidwater=self.rigidwater,
             hydrogenmass=self.hydrogenmass,
@@ -262,9 +311,10 @@ class QMMMConfig:
         print(f"  MM cores:        {self.numcores_mm}")
         print(f"  Platform:        {self.platform}")
         print(f"  Periodic:        {self.periodic}")
-        if self.periodic_cell_dimensions:
-            a, b, c, alpha, beta, gamma = self.periodic_cell_dimensions
-            print(f"  PBC Box:         a={a:.3f} b={b:.3f} c={c:.3f} α={alpha:.2f}° β={beta:.2f}° γ={gamma:.2f}°")
+        if self.pbc_vectors:
+            print(f"  PBC Box vectors:")
+            for i, vec in enumerate(self.pbc_vectors):
+                print(f"    v{i+1}: [{vec[0]:.4f}, {vec[1]:.4f}, {vec[2]:.4f}]")
 
 
 # Default configuration instance
@@ -301,9 +351,9 @@ def load_active_atoms(filename=None):
     """Load active atom indices from file."""
     return get_config().load_active_atoms(filename)
 
-def create_openmm_theory(prmtopfile=None, inpcrdfile=None, periodic_cell_dimensions=None):
+def create_openmm_theory(prmtopfile=None, inpcrdfile=None, pbc_vectors=None):
     """Create OpenMMTheory object using AMBER topology."""
-    return get_config().create_openmm_theory(prmtopfile, inpcrdfile, periodic_cell_dimensions)
+    return get_config().create_openmm_theory(prmtopfile, inpcrdfile, pbc_vectors)
 
 def create_dftb_theory():
     """Create DFTBTheory object."""
