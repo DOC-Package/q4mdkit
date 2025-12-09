@@ -16,7 +16,7 @@ result = cif_to_pdb(
     output_pdb=str(input_dir / "pentacene.pdb"),
     output_mol2=str(input_dir / "pentacene_template.mol2"),
     output_box=str(input_dir / "pentacene.box"),
-    supercell=(5, 7, 5),
+    supercell=(7, 7, 5),
     resname="PEN",
     mol_name="PEN"
 )

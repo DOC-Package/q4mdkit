@@ -1,0 +1,41 @@
+# QM/MM Settings Configuration File
+
+# File paths
+paths:
+  sk_dir: "/home/takahashi/qmmm/sk/3ob"
+  amber_prmtop: "/workspace/qm4dcrystal/examples/pentacene11117/input/pentacene.prmtop"
+  pdbfile: "/workspace/qm4dcrystal/examples/pentacene555/input/pentacene.pdb"
+  qatoms: "/workspace/qm4dcrystal/examples/pentacene555/input/qmatoms"
+  boxfile: "/workspace/qm4dcrystal/examples/pentacene555/input/pentacene.box"
+
+# Parallel settings
+parallel:
+  numcores_qm: 28
+  numcores_mm: 28
+
+# QM region settings
+qm:
+  charge: 0
+  mult: 1
+
+# DFTB parameters
+dftb:
+  slater_koster_files:
+    C-C: "{sk_dir}/C-C.skf"
+    C-H: "{sk_dir}/C-H.skf"
+    H-C: "{sk_dir}/H-C.skf"
+    H-H: "{sk_dir}/H-H.skf"
+  hubbard_derivs:
+    H: -0.1857
+    C: -0.1492
+  hcorrection_zeta: 4.0
+
+# OpenMM settings
+openmm:
+  periodic: true
+  periodic_nonbonded_cutoff: 9.0
+  use_boxfile: true
+  autoconstraints: HBonds
+  rigidwater: false
+  hydrogenmass: 1.0
+  platform: "CPU"
