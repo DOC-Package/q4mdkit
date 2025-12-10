@@ -7,7 +7,7 @@ from qmmm.md_config import get_md_config
 import mdtraj as md
 
 # Load configurations from parent directory
-qmmm_config = get_config("../qmmm_settings_init.yaml")
+qmmm_config = get_config("qmmm_settings.yaml")
 md_config = get_md_config("md_settings.yaml")
 
 # input: initial structure

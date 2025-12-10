@@ -6,8 +6,155 @@ for creating ASH theory objects.
 """
 
 import os
+import re
+import shutil
 import yaml
 from pathlib import Path
+
+
+class DFTBTheory_LogSCC:
+    """
+    DFTBTheory wrapper that logs SCC convergence information.
+    
+    Extracts SCC iteration count, error, and optionally total energy from 
+    detailed.out after each gradient calculation and appends to log files.
+    """
+    
+    def __init__(self, *args, scc_logfile="scc_error.dat",
+                 keep_detailed=False, output_dir="output",
+                 log_energy=False, energy_logfile="qm_energy.dat", **kwargs):
+        """
+        Initialize DFTBTheory with SCC logging.
+        
+        Args:
+            scc_logfile: Filename for SCC error log (saved in output_dir).
+            keep_detailed: If True, save detailed.out for each step.
+            output_dir: Directory to save log files.
+            log_energy: If True, also log total energy from detailed.out.
+            energy_logfile: Filename for energy log (saved in output_dir).
+            *args, **kwargs: Passed to DFTBTheory.__init__
+        """
+        from ash import DFTBTheory
+        self._dftb = DFTBTheory(*args, **kwargs)
+        self._callidx = 0
+        self._output_dir = Path(output_dir)
+        self._output_dir.mkdir(parents=True, exist_ok=True)
+        self._log = self._output_dir / scc_logfile
+        self._keep_detailed = keep_detailed
+        self._log_energy = log_energy
+        self._energy_log = self._output_dir / energy_logfile
+        # Overwrite log files at start of each run
+        self._log.write_text("# call_index  iSCC  SCC_error(a.u.)\n")
+        if self._log_energy:
+            self._energy_log.write_text("# call_index  Electronic(H)         Repulsive(H)          Total(H)\n")
+    
+    def __getattr__(self, name):
+        """Delegate attribute access to wrapped DFTBTheory."""
+        return getattr(self._dftb, name)
+    
+    def _read_scc_from_detailed(self, detailed="detailed.out"):
+        """
+        Read SCC iteration info from DFTB+ detailed.out file.
+        
+        Args:
+            detailed: Path to detailed.out file.
+        
+        Returns:
+            tuple: (iSCC, error) or None if not found.
+        """
+        p = Path(detailed)
+        if not p.exists():
+            return None
+        txt = p.read_text(errors="ignore")
+        
+        # Parse SCC convergence lines from detailed.out
+        # Format: " iSCC Total electronic   Diff electronic      SCC error"
+        # Example: "   12   -0.87075037E+02   -0.61469052E-09    0.74172173E-05"
+        pat = re.compile(
+            r"^\s*(\d+)\s+([-+]?\d+\.\d+E[+-]\d+)\s+([-+]?\d+\.\d+E[+-]\d+)\s+([-+]?\d+\.\d+E[+-]\d+)\s*$",
+            re.M
+        )
+        matches = pat.findall(txt)
+        if not matches:
+            return None
+        iSCC, _, _, err = matches[-1]
+        err = float(err)
+        return int(iSCC), err
+    
+    def _read_energy_from_detailed(self, detailed="detailed.out"):
+        """
+        Read energies from DFTB+ detailed.out file.
+        
+        Args:
+            detailed: Path to detailed.out file.
+        
+        Returns:
+            tuple: (electronic_energy, repulsive_energy, total_energy) in Hartree,
+                   or None if not found.
+        """
+        p = Path(detailed)
+        if not p.exists():
+            return None
+        txt = p.read_text(errors="ignore")
+        
+        # Parse energy lines from detailed.out (Hartree only)
+        # Format: "Total Electronic energy:           -87.4133454695 H        -2378.6382 eV"
+        # Format: "Repulsive energy:                    2.0023495898 H           54.4867 eV"
+        # Format: "Total energy:                      -85.4109958798 H        -2324.1514 eV"
+        
+        pat_elec = re.compile(r"Total Electronic energy:\s+([-+]?\d+\.\d+)\s+H")
+        pat_rep = re.compile(r"Repulsive energy:\s+([-+]?\d+\.\d+)\s+H")
+        pat_total = re.compile(r"Total energy:\s+([-+]?\d+\.\d+)\s+H")
+        
+        m_elec = pat_elec.search(txt)
+        m_rep = pat_rep.search(txt)
+        m_total = pat_total.search(txt)
+        
+        if not (m_elec and m_rep and m_total):
+            return None
+        
+        elec = float(m_elec.group(1))
+        rep = float(m_rep.group(1))
+        total = float(m_total.group(1))
+        return elec, rep, total
+    
+    def run(self, *args, **kwargs):
+        """
+        Run DFTB calculation and log SCC convergence if Grad=True.
+        
+        Args:
+            *args, **kwargs: Passed to DFTBTheory.run()
+        
+        Returns:
+            Result from DFTBTheory.run()
+        """
+        Grad = kwargs.get("Grad", False)
+        res = self._dftb.run(*args, **kwargs)
+        
+        if Grad:
+            # Log SCC error
+            info = self._read_scc_from_detailed("detailed.out")
+            if info is not None:
+                iSCC, err = info
+                with self._log.open("a") as f:
+                    f.write(f"{self._callidx:8d}  {iSCC:4d}  {err:.12e}\n")
+            
+            # Log energy if enabled
+            if self._log_energy:
+                energy_info = self._read_energy_from_detailed("detailed.out")
+                if energy_info is not None:
+                    elec, rep, total = energy_info
+                    with self._energy_log.open("a") as f:
+                        f.write(f"{self._callidx:8d}  {elec:20.10f}  {rep:20.10f}  {total:20.10f}\n")
+            
+            # Keep detailed.out if requested
+            if self._keep_detailed:
+                dest = self._output_dir / f"detailed_{self._callidx:06d}.out"
+                shutil.copy("detailed.out", dest)
+            
+            self._callidx += 1
+        
+        return res
 
 
 class QMMMConfig:
@@ -64,6 +211,14 @@ class QMMMConfig:
         }
         self.hubbard_derivs = dftb.get('hubbard_derivs', {})
         self.hcorrection_zeta = dftb.get('hcorrection_zeta', 4.0)
+        self.max_scc_iterations = dftb.get('max_scc_iterations', 300)
+        self.third_order_full = dftb.get('third_order_full', True)
+        # SCC logging settings
+        self.scc_log_enabled = dftb.get('scc_log_enabled', False)
+        self.scc_logfile = dftb.get('scc_logfile', 'scc_error.dat')
+        self.keep_detailed = dftb.get('keep_detailed', False)
+        self.log_energy = dftb.get('log_energy', False)
+        self.energy_logfile = dftb.get('energy_logfile', 'qm_energy.dat')
         
         # OpenMM settings
         openmm = config.get('openmm', {})
@@ -232,21 +387,42 @@ class QMMMConfig:
         """
         Create DFTBTheory object with DFTB3/3ob settings.
         
-        Returns:
-            DFTBTheory: Configured DFTB theory object.
-        """
-        from ash import DFTBTheory
+        If scc_log_enabled is True, returns DFTBTheory_LogSCC which logs
+        SCC convergence information from detailed.out at each step.
         
-        return DFTBTheory(
-            hamiltonian="DFTB",
-            SCC=True,
-            ThirdOrderFull=True,
-            slaterkoster_dict=self.slater_koster_files,
-            hubbard_derivs_dict=self.hubbard_derivs,
-            hcorrection_zeta=self.hcorrection_zeta,
-            numcores=self.numcores_qm,
-            printlevel=2
-        )
+        Returns:
+            DFTBTheory or DFTBTheory_LogSCC: Configured DFTB theory object.
+        """
+        if self.scc_log_enabled:
+            return DFTBTheory_LogSCC(
+                hamiltonian="DFTB",
+                SCC=True,
+                ThirdOrderFull=self.third_order_full,
+                slaterkoster_dict=self.slater_koster_files,
+                hubbard_derivs_dict=self.hubbard_derivs,
+                hcorrection_zeta=self.hcorrection_zeta,
+                MaxSCCIterations=self.max_scc_iterations,
+                numcores=self.numcores_qm,
+                printlevel=2,
+                scc_logfile=self.scc_logfile,
+                keep_detailed=self.keep_detailed,
+                output_dir="output",
+                log_energy=self.log_energy,
+                energy_logfile=self.energy_logfile
+            )
+        else:
+            from ash import DFTBTheory
+            return DFTBTheory(
+                hamiltonian="DFTB",
+                SCC=True,
+                ThirdOrderFull=self.third_order_full,
+                slaterkoster_dict=self.slater_koster_files,
+                hubbard_derivs_dict=self.hubbard_derivs,
+                hcorrection_zeta=self.hcorrection_zeta,
+                MaxSCCIterations=self.max_scc_iterations,
+                numcores=self.numcores_qm,
+                printlevel=2
+            )
     
     def create_qmmm_theory(self, frag, qmatoms, omm=None, qm_dftb=None):
         """

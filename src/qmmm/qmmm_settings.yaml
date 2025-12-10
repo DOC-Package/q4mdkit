@@ -31,6 +31,14 @@ dftb:
     H: -0.1857
     C: -0.1492
   hcorrection_zeta: 4.0
+  max_scc_iterations: 300  # Maximum SCC iterations for DFTB
+  third_order_full: true   # Enable DFTB3 third-order correction
+  # SCC error logging (extract from detailed.out at each MD step)
+  scc_log_enabled: false   # Enable SCC convergence logging
+  scc_logfile: "scc_error.dat"  # Output file for SCC error log
+  keep_detailed: false     # Keep detailed.out for each step (detailed_NNNNNN.out)
+  log_energy: false        # Log QM total energy at each step
+  energy_logfile: "qm_energy.dat"  # Output file for energy log
 
 # OpenMM settings
 openmm:

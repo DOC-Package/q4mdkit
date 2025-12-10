@@ -1,9 +1,9 @@
 <?xml version="1.0" ?>
 <State openmmVersion="8.4" stepCount="0" time="0" type="State" version="1">
 	<PeriodicBoxVectors>
-		<A x="1.8825900000000002" y="0" z="0"/>
-		<B x="0" y="2.31414" z="0"/>
-		<C x="0" y="0" z="4.33272"/>
+		<A x="3.1376500000000003" y="0" z="0"/>
+		<B x=".3680593138" y="3.8392981066200003" z="0"/>
+		<C x=".25063071462000003" y="1.63841642651" z="7.028407024230001"/>
 	</PeriodicBoxVectors>
 	<Parameters/>
 	<Positions>

@@ -134,7 +134,7 @@ class MDConfig:
             integrator=self.nvt_integrator,
             traj_frequency=self.traj_frequency,
             trajfilename=f"{output_dir}/nvt",
-            datafilename=f"{output_dir}/nvt.txt",
+            datafilename=f"{output_dir}/nvt.csv",
             statefile=statefile
         )
     
@@ -177,7 +177,7 @@ class MDConfig:
             integrator=self.npt_integrator,
             traj_frequency=self.traj_frequency,
             trajfilename=f"{output_dir}/npt",
-            datafilename=f"{output_dir}/npt.txt",
+            datafilename=f"{output_dir}/npt.csv",
             statefile=statefile
         )
     
@@ -214,7 +214,7 @@ class MDConfig:
             integrator=self.nve_integrator,
             traj_frequency=self.traj_frequency,
             trajfilename=f"{output_dir}/nve",
-            datafilename=f"{output_dir}/nve.txt",
+            datafilename=f"{output_dir}/nve.csv",
             statefile=statefile
         )
     

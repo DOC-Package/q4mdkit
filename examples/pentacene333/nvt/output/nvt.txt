@@ -1,2 +1,0 @@
-#"Step","Time (ps)","Potential Energy (kJ/mole)","Kinetic Energy (kJ/mole)","Temperature (K)"
-50,0.05000000000000004,-592.7645195298605,4948.778137634921,233.36647763078133
