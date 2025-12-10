@@ -31,8 +31,8 @@ dftb:
     C: -0.1492
   hcorrection_zeta: 4.0
   max_scc_iterations: 300  
-  scc_log: true   
-  energy_log: true        
+  scc_log_enabled: true   
+  log_energy: true        
 
 # OpenMM settings
 openmm:
@@ -40,5 +40,6 @@ openmm:
   periodic_nonbonded_cutoff: 9.0
   use_boxfile: true
   autoconstraints: HBonds
+  rigidwater: false
   hydrogenmass: 1.0
   platform: "CPU"

@@ -22,7 +22,7 @@ class DFTBTheory_LogSCC:
     
     def __init__(self, *args, scc_logfile="scc_error.dat",
                  keep_detailed=False, output_dir="output",
-                 log_energy=False, energy_logfile="qm_energy.dat", **kwargs):
+                 energy_log=False, energy_logfile="qm_energy.dat", **kwargs):
         """
         Initialize DFTBTheory with SCC logging.
         
@@ -30,7 +30,7 @@ class DFTBTheory_LogSCC:
             scc_logfile: Filename for SCC error log (saved in output_dir).
             keep_detailed: If True, save detailed.out for each step.
             output_dir: Directory to save log files.
-            log_energy: If True, also log total energy from detailed.out.
+            energy_log: If True, also log total energy from detailed.out.
             energy_logfile: Filename for energy log (saved in output_dir).
             *args, **kwargs: Passed to DFTBTheory.__init__
         """
@@ -41,12 +41,12 @@ class DFTBTheory_LogSCC:
         self._output_dir.mkdir(parents=True, exist_ok=True)
         self._log = self._output_dir / scc_logfile
         self._keep_detailed = keep_detailed
-        self._log_energy = log_energy
-        self._energy_log = self._output_dir / energy_logfile
+        self._energy_log = energy_log
+        self._energy_logfile = self._output_dir / energy_logfile
         # Overwrite log files at start of each run
         self._log.write_text("# call_index  iSCC  SCC_error(a.u.)\n")
-        if self._log_energy:
-            self._energy_log.write_text("# call_index  Electronic(H)         Repulsive(H)          Total(H)\n")
+        if self._energy_log:
+            self._energy_logfile.write_text("# call_index  Electronic(H)         Repulsive(H)          Total(H)\n")
     
     def __getattr__(self, name):
         """Delegate attribute access to wrapped DFTBTheory."""
@@ -140,11 +140,11 @@ class DFTBTheory_LogSCC:
                     f.write(f"{self._callidx:8d}  {iSCC:4d}  {err:.12e}\n")
             
             # Log energy if enabled
-            if self._log_energy:
+            if self._energy_log:
                 energy_info = self._read_energy_from_detailed("detailed.out")
                 if energy_info is not None:
                     elec, rep, total = energy_info
-                    with self._energy_log.open("a") as f:
+                    with self._energy_logfile.open("a") as f:
                         f.write(f"{self._callidx:8d}  {elec:20.10f}  {rep:20.10f}  {total:20.10f}\n")
             
             # Keep detailed.out if requested
@@ -214,10 +214,10 @@ class QMMMConfig:
         self.max_scc_iterations = dftb.get('max_scc_iterations', 300)
         self.third_order_full = dftb.get('third_order_full', True)
         # SCC logging settings
-        self.scc_log_enabled = dftb.get('scc_log_enabled', False)
+        self.scc_log = dftb.get('scc_log', False)
         self.scc_logfile = dftb.get('scc_logfile', 'scc_error.dat')
         self.keep_detailed = dftb.get('keep_detailed', False)
-        self.log_energy = dftb.get('log_energy', False)
+        self.energy_log = dftb.get('energy_log', False)
         self.energy_logfile = dftb.get('energy_logfile', 'qm_energy.dat')
         
         # OpenMM settings
@@ -387,13 +387,13 @@ class QMMMConfig:
         """
         Create DFTBTheory object with DFTB3/3ob settings.
         
-        If scc_log_enabled is True, returns DFTBTheory_LogSCC which logs
+        If scc_log is True, returns DFTBTheory_LogSCC which logs
         SCC convergence information from detailed.out at each step.
         
         Returns:
             DFTBTheory or DFTBTheory_LogSCC: Configured DFTB theory object.
         """
-        if self.scc_log_enabled:
+        if self.scc_log:
             return DFTBTheory_LogSCC(
                 hamiltonian="DFTB",
                 SCC=True,
@@ -407,7 +407,7 @@ class QMMMConfig:
                 scc_logfile=self.scc_logfile,
                 keep_detailed=self.keep_detailed,
                 output_dir="output",
-                log_energy=self.log_energy,
+                energy_log=self.energy_log,
                 energy_logfile=self.energy_logfile
             )
         else:
