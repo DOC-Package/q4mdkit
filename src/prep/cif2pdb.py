@@ -9,7 +9,7 @@ from ase.io import read, write as ase_write
 # Import from same directory
 from .mol_utils import (
     build_graph, split_molecules_pbc, unwrap_to_single_image, recenter_system, 
-    wrap_to_box, deterministic_template_order, best_isomorphism
+    wrap_to_box, deterministic_template_order, best_isomorphism, best_isomorphism_fast
 )
 
 def write_pdb_supercell(path: str, atoms: Atoms, molecule_chunks: List[List[int]], 
@@ -431,6 +431,305 @@ def cif_to_pdb(cif_file: str, output_pdb: str = None, output_mol2: str = None,
         inv = {v: k for k, v in mapping.items()}
         order_src_local = [inv[j] for j in template_local_order]
         per_mol_orders[mi] = order_src_local
+    
+    # Write PDB supercell
+    write_pdb_supercell(output_pdb, atoms, comps, per_mol_orders, unwrapped_positions, resname=resname)
+    print(f"[OK] Wrote supercell PDB: {output_pdb}")
+    
+    # Write mol2 for template molecule (for GAFF2)
+    write_mol2_single_molecule(output_mol2, atoms, idxs0, template_local_order,
+                               unwrapped_positions[0], bond_scale=bond_scale,
+                               mol_name=mol_name)
+    print(f"[OK] Wrote template molecule mol2: {output_mol2}")
+    print(f"[INFO] Use this mol2 file with antechamber/parmchk2 for GAFF2 parameterization")
+    
+    # Write box parameters file
+    write_box_file(output_box, atoms)
+    print(f"[OK] Wrote box parameters: {output_box}")
+    
+    return {
+        'pdb': output_pdb,
+        'mol2': output_mol2,
+        'box': output_box,
+        'n_atoms': len(atoms),
+        'n_molecules': len(comps)
+    }
+
+
+def cif_to_pdb_wlhash(cif_file: str, output_pdb: str = None, output_mol2: str = None, 
+                      output_box: str = None, supercell: tuple = (1, 1, 1),
+                      bond_scale: float = 1.10, resname: str = "MOL", 
+                      mol_name: str = "MOL", recenter: bool = True, wrap: bool = True):
+    """
+    Fast AND accurate version using Weisfeiler-Lehman graph hashing.
+    
+    Uses WL hash to identify chemically equivalent atoms, then matches
+    by coordinate distance. O(n log n) instead of O(n!) complexity.
+    
+    Recommended for:
+    - Large molecules (>50 atoms/molecule)
+    - Large supercells (>20 molecules)
+    - Production use with force field parameterization
+    
+    Algorithm:
+    1. Build molecular graph and compute WL hash for each atom
+    2. Atoms with same hash are chemically equivalent
+    3. Match by nearest distance after Kabsch alignment
+    """
+    from pymatgen.core import Structure
+    from pymatgen.io.ase import AseAtomsAdaptor
+    
+    cif_path = Path(cif_file)
+    cif_basename = cif_path.stem
+    
+    if output_pdb is None:
+        output_pdb = str(cif_path.parent / f"{cif_basename}.pdb")
+    if output_mol2 is None:
+        output_mol2 = str(cif_path.parent / f"{cif_basename}_template.mol2")
+    if output_box is None:
+        output_box = str(cif_path.parent / f"{cif_basename}.box")
+    
+    # Load CIF file
+    try:
+        atoms = read(cif_file)
+        print(f"[INFO] Successfully loaded with ASE")
+    except Exception as e1:
+        print(f"[WARN] Failed to read CIF with ASE: {e1}")
+        try:
+            s = Structure.from_file(cif_file)
+            atoms = AseAtomsAdaptor.get_atoms(s)
+            print(f"[INFO] Loaded with pymatgen")
+        except Exception as e2:
+            raise Exception(f"[ERROR] Could not load CIF file: {e2}")
+    
+    # Make supercell if needed
+    nx, ny, nz = supercell
+    if (nx, ny, nz) != (1, 1, 1):
+        from ase.build import make_supercell
+        S = np.diag([nx, ny, nz])
+        atoms = make_supercell(atoms, S)
+        print(f"[INFO] Created {nx}x{ny}x{nz} supercell: {len(atoms)} atoms")
+    
+    # Identify molecules
+    comps = split_molecules_pbc(atoms, scale=bond_scale)
+    print(f"[INFO] Detected {len(comps)} molecules")
+    
+    if len(comps) == 1:
+        print("[WARN] Detected a single connected component. This may not be a molecular crystal.")
+    
+    # Deterministic molecule ordering by fractional COM
+    spos = atoms.get_scaled_positions()
+    def frac_com(idxs):
+        f = np.mean(spos[idxs], axis=0)
+        return np.mod(f, 1.0)
+    order_mols = sorted(range(len(comps)), key=lambda i: tuple(frac_com(comps[i])))
+    comps = [comps[i] for i in order_mols]
+    
+    # Unwrap each molecule
+    unwrapped_positions = []
+    all_numbers = atoms.numbers.copy()
+    for idxs in comps:
+        pos = unwrap_to_single_image(atoms, idxs)
+        unwrapped_positions.append(pos)
+    
+    # Optional: Recenter and wrap
+    if recenter:
+        print("[INFO] Recentering system to form a compact cluster...")
+        unwrapped_positions = recenter_system(unwrapped_positions, np.array(atoms.get_cell()))
+    
+    if wrap:
+        print("[INFO] Wrapping molecules back into the simulation box...")
+        unwrapped_positions = wrap_to_box(unwrapped_positions, np.array(atoms.get_cell()))
+    
+    # Build template order for molecule 0
+    idxs0 = comps[0]
+    mol0 = Atoms(numbers=all_numbers[idxs0], positions=unwrapped_positions[0])
+    G0 = build_graph(mol0, scale=bond_scale)
+    template_local_order = deterministic_template_order(G0, mol0, list(range(len(idxs0))))
+    print(f"[INFO] Template molecule has {len(idxs0)} atoms")
+    
+    # Prepare per-molecule reorder maps using FAST isomorphism
+    per_mol_orders: Dict[int, List[int]] = {}
+    per_mol_orders[0] = template_local_order
+    
+    print(f"[INFO] Using WL-hash based fast accurate matching...")
+    # For other molecules: find isomorphism mapping to template
+    for mi in range(1, len(comps)):
+        idxs_i = comps[mi]
+        mol_i = Atoms(numbers=all_numbers[idxs_i], positions=unwrapped_positions[mi])
+        # Use fast isomorphism with WL hashing
+        mapping = best_isomorphism_fast(mol_i, mol0, list(range(len(idxs_i))),
+                                        list(range(len(idxs0))), scale=bond_scale)
+        inv = {v: k for k, v in mapping.items()}
+        order_src_local = [inv[j] for j in template_local_order]
+        per_mol_orders[mi] = order_src_local
+        
+        if (mi + 1) % 10 == 0:
+            print(f"[INFO] Processed {mi + 1}/{len(comps)} molecules...")
+    
+    # Write PDB supercell
+    write_pdb_supercell(output_pdb, atoms, comps, per_mol_orders, unwrapped_positions, resname=resname)
+    print(f"[OK] Wrote supercell PDB: {output_pdb}")
+    
+    # Write mol2 for template molecule (for GAFF2)
+    write_mol2_single_molecule(output_mol2, atoms, idxs0, template_local_order,
+                               unwrapped_positions[0], bond_scale=bond_scale,
+                               mol_name=mol_name)
+    print(f"[OK] Wrote template molecule mol2: {output_mol2}")
+    print(f"[INFO] Use this mol2 file with antechamber/parmchk2 for GAFF2 parameterization")
+    
+    # Write box parameters file
+    write_box_file(output_box, atoms)
+    print(f"[OK] Wrote box parameters: {output_box}")
+    
+    return {
+        'pdb': output_pdb,
+        'mol2': output_mol2,
+        'box': output_box,
+        'n_atoms': len(atoms),
+        'n_molecules': len(comps)
+    }
+
+
+def cif_to_pdb_coordsort(cif_file: str, output_pdb: str = None, output_mol2: str = None, 
+                         output_box: str = None, supercell: tuple = (1, 1, 1),
+                         bond_scale: float = 1.10, resname: str = "MOL", 
+                         mol_name: str = "MOL", recenter: bool = True, wrap: bool = True):
+    """
+    Fast version using coordinate sorting (no graph matching).
+    
+    Uses simple atom sorting (by atomic number, then coordinates) instead of
+    best_isomorphism for matching molecules. Much faster for large systems,
+    but atom ordering may be less consistent across molecules.
+    
+    Suitable for:
+    - Large supercells (e.g., >100 molecules)
+    - Systems with large molecules (e.g., >100 atoms/molecule)
+    - Quick visualization/testing
+    
+    Not recommended for:
+    - Systems requiring exact atom ordering consistency (e.g., force field parameterization)
+    """
+    from pymatgen.core import Structure
+    from pymatgen.io.ase import AseAtomsAdaptor
+    
+    cif_path = Path(cif_file)
+    cif_basename = cif_path.stem
+    
+    if output_pdb is None:
+        output_pdb = str(cif_path.parent / f"{cif_basename}.pdb")
+    if output_mol2 is None:
+        output_mol2 = str(cif_path.parent / f"{cif_basename}_template.mol2")
+    if output_box is None:
+        output_box = str(cif_path.parent / f"{cif_basename}.box")
+    
+    # Load CIF file
+    try:
+        atoms = read(cif_file)
+        print(f"[INFO] Successfully loaded with ASE")
+    except Exception as e1:
+        print(f"[WARN] Failed to read CIF with ASE: {e1}")
+        try:
+            s = Structure.from_file(cif_file)
+            atoms = AseAtomsAdaptor.get_atoms(s)
+            print(f"[INFO] Loaded with pymatgen")
+        except Exception as e2:
+            raise Exception(f"[ERROR] Could not load CIF file: {e2}")
+    
+    # Make supercell if needed
+    nx, ny, nz = supercell
+    if (nx, ny, nz) != (1, 1, 1):
+        from ase.build import make_supercell
+        S = np.diag([nx, ny, nz])
+        atoms = make_supercell(atoms, S)
+        print(f"[INFO] Created {nx}x{ny}x{nz} supercell: {len(atoms)} atoms")
+    
+    # Identify molecules
+    comps = split_molecules_pbc(atoms, scale=bond_scale)
+    print(f"[INFO] Detected {len(comps)} molecules")
+    
+    if len(comps) == 1:
+        print("[WARN] Detected a single connected component. This may not be a molecular crystal.")
+    
+    # Deterministic molecule ordering by fractional COM
+    spos = atoms.get_scaled_positions()
+    def frac_com(idxs):
+        f = np.mean(spos[idxs], axis=0)
+        return np.mod(f, 1.0)
+    order_mols = sorted(range(len(comps)), key=lambda i: tuple(frac_com(comps[i])))
+    comps = [comps[i] for i in order_mols]
+    
+    # Unwrap each molecule
+    unwrapped_positions = []
+    all_numbers = atoms.numbers.copy()
+    for idxs in comps:
+        pos = unwrap_to_single_image(atoms, idxs)
+        unwrapped_positions.append(pos)
+    
+    # Optional: Recenter and wrap
+    if recenter:
+        print("[INFO] Recentering system to form a compact cluster...")
+        unwrapped_positions = recenter_system(unwrapped_positions, np.array(atoms.get_cell()))
+    
+    if wrap:
+        print("[INFO] Wrapping molecules back into the simulation box...")
+        unwrapped_positions = wrap_to_box(unwrapped_positions, np.array(atoms.get_cell()))
+    
+    # Build template order for molecule 0
+    idxs0 = comps[0]
+    mol0 = Atoms(numbers=all_numbers[idxs0], positions=unwrapped_positions[0])
+    G0 = build_graph(mol0, scale=bond_scale)
+    template_local_order = deterministic_template_order(G0, mol0, list(range(len(idxs0))))
+    print(f"[INFO] Template molecule has {len(idxs0)} atoms")
+    
+    # Fast matching: sort atoms by (atomic_number, then distance from centroid)
+    def fast_atom_order(numbers, positions):
+        """Sort atoms by atomic number, then by distance from centroid (canonical order)."""
+        centroid = positions.mean(axis=0)
+        dists = np.linalg.norm(positions - centroid, axis=1)
+        # Create sorting key: (atomic_number, distance)
+        order = np.lexsort((dists, numbers))
+        return order
+    
+    per_mol_orders: Dict[int, List[int]] = {}
+    per_mol_orders[0] = template_local_order
+    
+    print(f"[INFO] Using fast atom matching (no graph isomorphism)...")
+    
+    # For all other molecules, use same ordering strategy as template
+    # Sort by (atomic_number, distance from centroid), then map to template order
+    template_numbers = all_numbers[idxs0]
+    template_sort_order = fast_atom_order(template_numbers, unwrapped_positions[0])
+    # template_local_order[i] is the i-th atom to output
+    # We need to map: for each molecule, find equivalent sorting and remap
+    
+    for mi in range(1, len(comps)):
+        idxs_i = comps[mi]
+        mol_numbers = all_numbers[idxs_i]
+        mol_sort_order = fast_atom_order(mol_numbers, unwrapped_positions[mi])
+        
+        # Create mapping: sorted position -> local index
+        # template_sort_order[k] = local index of k-th atom in sorted order (template)
+        # mol_sort_order[k] = local index of k-th atom in sorted order (this mol)
+        # template_local_order[j] = which local index is j-th in output
+        
+        # For template: output order is template_local_order
+        # We want to find: for each position j in template_local_order,
+        # which atom in mol_i corresponds?
+        
+        # Build inverse: template_inv[local_idx] = position in sorted order
+        template_inv = np.argsort(template_sort_order)
+        mol_inv = np.argsort(mol_sort_order)
+        
+        # Map template_local_order to mol order
+        order_local = []
+        for j in range(len(idxs_i)):
+            tpl_local = template_local_order[j]  # template's j-th output atom (local idx)
+            sorted_pos = template_inv[tpl_local]  # position in sorted order
+            mol_local = mol_sort_order[sorted_pos]  # mol's atom at same sorted position
+            order_local.append(int(mol_local))
+        
+        per_mol_orders[mi] = order_local
     
     # Write PDB supercell
     write_pdb_supercell(output_pdb, atoms, comps, per_mol_orders, unwrapped_positions, resname=resname)

@@ -159,11 +159,15 @@ def deterministic_template_order(G: nx.Graph, atoms: Atoms, idxs: List[int]) -> 
     return order_local
 
 
+
+
 def best_isomorphism(src: Atoms, ref: Atoms, src_idxs: List[int], ref_idxs: List[int], 
                     scale: float = 1.10) -> Dict[int, int]:
     """
     Find graph isomorphism mapping minimizing RMSD (Kabsch alignment).
     See MOL_UTILS_USAGE.md for details.
+    
+    WARNING: This is slow for large molecules (>50 atoms). Use best_isomorphism_fast instead.
     """
     # Build graphs *restricted to the molecule* (reindexed 0..n-1)
     def sub_atoms(atoms, idxs):
@@ -210,3 +214,133 @@ def best_isomorphism(src: Atoms, ref: Atoms, src_idxs: List[int], ref_idxs: List
         raise RuntimeError("Graph isomorphism failed; try adjusting --bond-scale or ensure H atoms are present.")
     
     return best_map
+
+
+def weisfeiler_lehman_hash(G: nx.Graph, iterations: int = 3) -> Dict[int, str]:
+    """
+    Compute Weisfeiler-Lehman graph hash for each node.
+    
+    This creates a unique "fingerprint" for each atom based on its local 
+    graph neighborhood, which can be used for fast matching.
+    
+    Args:
+        G: NetworkX graph with node attributes 'Z', 'deg', 'hnb'
+        iterations: Number of WL iterations (more = more discriminating)
+    
+    Returns:
+        Dictionary mapping node index to hash string
+    """
+    # Initialize labels with node attributes
+    labels = {}
+    for node in G.nodes():
+        attrs = G.nodes[node]
+        labels[node] = f"{attrs['Z']}_{attrs['deg']}_{attrs['hnb']}"
+    
+    for _ in range(iterations):
+        new_labels = {}
+        for node in G.nodes():
+            # Get sorted neighbor labels
+            neighbor_labels = sorted([labels[n] for n in G.neighbors(node)])
+            # Combine own label with neighbor labels
+            new_labels[node] = labels[node] + "_[" + ",".join(neighbor_labels) + "]"
+        labels = new_labels
+    
+    return labels
+
+
+def best_isomorphism_fast(src: Atoms, ref: Atoms, src_idxs: List[int], ref_idxs: List[int], 
+                          scale: float = 1.10) -> Dict[int, int]:
+    """
+    Fast graph isomorphism using Weisfeiler-Lehman hashing + coordinate matching.
+    
+    Algorithm:
+    1. Compute WL hash for each atom (captures local graph structure)
+    2. Group atoms by (element, WL hash)
+    3. For atoms with same hash, match by nearest distance after alignment
+    
+    This is O(n log n) instead of O(n!) for the naive approach.
+    Accurate for molecular crystals where molecules have identical topology.
+    
+    Args:
+        src: Source molecule Atoms object
+        ref: Reference (template) molecule Atoms object
+        src_idxs: Indices of source atoms (should be 0..n-1 for extracted molecule)
+        ref_idxs: Indices of reference atoms (should be 0..n-1 for extracted molecule)
+        scale: Bond scale factor for graph building
+    
+    Returns:
+        Dictionary mapping src index -> ref index
+    """
+    def sub_atoms(atoms, idxs):
+        return Atoms(numbers=atoms.numbers[idxs], positions=atoms.positions[idxs])
+
+    sub_s = sub_atoms(src, src_idxs)
+    sub_r = sub_atoms(ref, ref_idxs)
+
+    Gs = build_graph(sub_s, scale)
+    Gr = build_graph(sub_r, scale)
+    
+    # Compute WL hashes
+    hash_s = weisfeiler_lehman_hash(Gs)
+    hash_r = weisfeiler_lehman_hash(Gr)
+    
+    Ps = sub_s.get_positions()
+    Pr = sub_r.get_positions()
+    
+    # First, do Kabsch alignment of src to ref (using all atoms)
+    Ps_centered = Ps - Ps.mean(axis=0)
+    Pr_centered = Pr - Pr.mean(axis=0)
+    
+    # Kabsch rotation matrix
+    H = Ps_centered.T @ Pr_centered
+    U, S, Vt = np.linalg.svd(H)
+    R = U @ Vt
+    # Handle reflection
+    if np.linalg.det(R) < 0:
+        Vt[-1, :] *= -1
+        R = U @ Vt
+    
+    # Align source positions to reference frame
+    Ps_aligned = Ps_centered @ R
+    
+    # Group reference atoms by their WL hash
+    ref_by_hash: Dict[str, List[int]] = {}
+    for i, h in hash_r.items():
+        if h not in ref_by_hash:
+            ref_by_hash[h] = []
+        ref_by_hash[h].append(i)
+    
+    # Match each source atom to reference atom with same hash and nearest position
+    mapping = {}
+    used_ref = set()
+    
+    for src_i in range(len(sub_s)):
+        src_hash = hash_s[src_i]
+        
+        if src_hash not in ref_by_hash:
+            raise RuntimeError(f"No matching hash found for atom {src_i}. "
+                             "Molecules may have different topology.")
+        
+        # Find nearest unmatched reference atom with same hash
+        candidates = [r for r in ref_by_hash[src_hash] if r not in used_ref]
+        
+        if not candidates:
+            raise RuntimeError(f"No available match for atom {src_i} with hash {src_hash}. "
+                             "This shouldn't happen if molecules are identical.")
+        
+        # Find nearest by position
+        src_pos = Ps_aligned[src_i]
+        best_ref = None
+        best_dist = float('inf')
+        
+        for ref_i in candidates:
+            dist = np.linalg.norm(src_pos - Pr_centered[ref_i])
+            if dist < best_dist:
+                best_dist = dist
+                best_ref = ref_i
+        
+        mapping[src_i] = best_ref
+        used_ref.add(best_ref)
+    
+    return mapping
+
