@@ -1,17 +1,20 @@
 # VMD visualization script for QM/MM system
-# Usage: vmd -e /home/takahashi/python/qm4dcrystal/examples/pentacene995/input/visualize_vmd.tcl
+# Usage: vmd -e /home/takahashi/python/qm4dcrystal/examples/pentacene775/input/visualize_vmd.tcl
 
 # Load structure
-mol new /home/takahashi/python/qm4dcrystal/examples/pentacene995/input/pentacene_qmmm.pdb type pdb waitfor all
+mol new /home/takahashi/python/qm4dcrystal/examples/pentacene775/input/pentacene_qmmm.pdb type pdb waitfor all
 
 # Color by B-factor (QM/MM region)
 mol delrep 0 top
+
+# MM region: thin lines
 mol representation Lines 1.000000
 mol color Beta
 mol selection {beta < 50}
 mol material Opaque
 mol addrep top
 
+# QM region: CPK balls
 mol representation CPK 1.000000 0.300000 12.000000 12.000000
 mol color Name
 mol selection {beta > 50}

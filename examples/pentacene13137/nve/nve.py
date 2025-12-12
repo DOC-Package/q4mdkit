@@ -8,11 +8,10 @@ from qmmm.xml import remove_montecarlo_xml
 import mdtraj as md
 
 # Load configurations from parent directory
-qmmm_config = get_config("../qmmm_settings.yaml")
+qmmm_config = get_config("qmmm_settings.yaml")
 md_config = get_md_config("md_settings.yaml")
 
 # input: initial structure
-input_gro = "../npt/output/npt_lastframe.gro"
 input_pdb = "../npt/output/npt_lastframe.pdb"
 state_npt = "../npt/OpenMM_MD_final_state.xml"
 # Prepare state XML for NVE (remove MonteCarlo barostat parameters)
@@ -24,13 +23,13 @@ output_dir = "output"
 os.makedirs(output_dir, exist_ok=True)
 
 print("="*60)
-print("  NVT Equilibration (300 K)  ")
+print("  NVE Calculation  ")
 print("="*60)
 
 frag = Fragment(pdbfile=input_pdb)
 qmatoms = qmmm_config.load_qmatoms()
 
-omm = qmmm_config.create_openmm_theory(grofile=input_gro)
+omm = qmmm_config.create_openmm_theory()
 qm_dftb = qmmm_config.create_dftb_theory()
 qmmm = qmmm_config.create_qmmm_theory(frag, qmatoms, omm, qm_dftb)
 

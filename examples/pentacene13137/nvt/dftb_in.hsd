@@ -6,7 +6,7 @@ ElectricField = {
   PointCharges = { 
     GaussianBlurWidth [Angstrom] = 0.0
     CoordsAndCharges [Angstrom] = DirectRead { 
-    Records = 8928
+    Records = 1872
     File = 'PCcharges.dat'
     }
   }

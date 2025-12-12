@@ -6,7 +6,7 @@ md:
   traj_frequency: 50       # steps
   nvt:
     temperature: 300.0       # K
-    coupling_frequency: 0.5  # ps
+    coupling_frequency: 0.1  # ps
   npt:
     pressure: 1              # bar
     barostat_frequency: 25   # steps
