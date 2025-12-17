@@ -361,10 +361,21 @@ def setup_fragment_directory(frame_dir: Path, fragment_name: str, constrained_at
     return frag_dir
 
 
-def run_dftb_calculation(frame_dir, write_hs, result_queue, dftb_library_path):
+def run_dftb_calculation(qm_coords_bohr, frame_dir, write_hs, result_queue, dftb_library_path):
     """Run DFTB+ calculation in a separate process within frame directory.
     
-    Geometry is read from qm_coords.xyz via HSD file reference.
+    Parameters:
+    -----------
+    qm_coords_bohr : np.ndarray
+        QM atom coordinates in Bohr units for set_geometry()
+    frame_dir : Path
+        Directory containing dftb_in.hsd
+    write_hs : bool
+        Whether to write Hamiltonian/Overlap matrices
+    result_queue : mp.Queue
+        Queue to return results
+    dftb_library_path : str
+        Path to DFTB+ library
     """
     try:
         # Change to frame directory
@@ -401,7 +412,8 @@ def run_dftb_calculation(frame_dir, write_hs, result_queue, dftb_library_path):
             hsdpath="dftb_in.hsd",
             logfile="dftb.log",
         )
-        # Geometry is loaded from qm_coords.xyz via HSD, no set_geometry needed
+        # Set geometry triggers the SCF calculation
+        cdftb.set_geometry(qm_coords_bohr)
         energy = cdftb.get_energy()
         mcharge = cdftb.get_gross_charges()
         cdftb.close()
@@ -416,14 +428,25 @@ def run_dftb_calculation(frame_dir, write_hs, result_queue, dftb_library_path):
         result_queue.put(("error", str(e), None))
 
 
-def run_dftb_in_subprocess(frame_dir, write_hs=False, timeout=300, 
+def run_dftb_in_subprocess(qm_coords_bohr, frame_dir, write_hs=False, timeout=300, 
                            dftb_library_path="/home/takahashi/opt/dftb+/lib/libdftbplus.so"):
     """Run DFTB+ in a subprocess that can be killed if it hangs or crashes.
     
-    Geometry is read from qm_coords.xyz via HSD file reference.
+    Parameters:
+    -----------
+    qm_coords_bohr : np.ndarray
+        QM atom coordinates in Bohr units for set_geometry()
+    frame_dir : Path
+        Directory containing dftb_in.hsd
+    write_hs : bool
+        Whether to write Hamiltonian/Overlap matrices
+    timeout : int
+        Timeout in seconds
+    dftb_library_path : str
+        Path to DFTB+ library
     """
     result_queue = mp.Queue()
-    proc = mp.Process(target=run_dftb_calculation, args=(frame_dir, write_hs, result_queue, dftb_library_path))
+    proc = mp.Process(target=run_dftb_calculation, args=(qm_coords_bohr, frame_dir, write_hs, result_queue, dftb_library_path))
     proc.start()
     proc.join(timeout=timeout)
     
@@ -555,7 +578,7 @@ def run_cdftb_analysis(config_path: Path):
                 )
                 
                 energy, mcharge, error = run_dftb_in_subprocess(
-                    frag_dir, write_hs=False,
+                    qm_coords_bohr, frag_dir, write_hs=False,
                     timeout=config.timeout, dftb_library_path=config.dftb_library_path
                 )
                 
@@ -588,7 +611,7 @@ def run_cdftb_analysis(config_path: Path):
                     
                     # WriteHS calculation
                     energy_hs, _, error_hs = run_dftb_in_subprocess(
-                        frag_dir, write_hs=True,
+                        qm_coords_bohr, frag_dir, write_hs=True,
                         timeout=config.timeout, dftb_library_path=config.dftb_library_path
                     )
                     if error_hs:

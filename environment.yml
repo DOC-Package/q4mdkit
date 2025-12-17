@@ -1,0 +1,44 @@
+name: qm4dcrystal
+channels:
+  - conda-forge
+  - defaults
+
+dependencies:
+  # Python
+  - python>=3.10
+
+  # === prep module ===
+  # Crystal structure I/O and manipulation
+  - ase>=3.22
+  - networkx>=3.0
+
+  # === qmmm (MD) module ===
+  # OpenMM MD engine
+  - openmm>=8.0
+  # Trajectory analysis
+  - mdtraj>=1.9
+  # ASH (QM/MM) - install via pip
+
+  # === cdftb module ===
+  # DFTB+ Python API (from conda-forge)
+  - dftbplus>=24.1
+
+  # === Common dependencies ===
+  - numpy>=1.24
+  - scipy>=1.10
+  - pandas>=2.0
+  - matplotlib>=3.7
+  - pyyaml>=6.0
+
+  # Development and testing
+  - pytest>=7.4
+  - pip
+
+  # Packages installed via pip
+  - pip:
+    # ASH (Atomic Simulation Handbook) - for QM/MM
+    # - ash  # May require installation from GitHub
+    # HSD parser for DFTB+
+    - hsd
+    # Install this package in editable mode
+    - -e .

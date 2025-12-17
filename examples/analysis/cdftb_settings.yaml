@@ -35,3 +35,10 @@ fragments:
     atom_range: "1:36"
   - name: "fragment2"
     atom_range: "37:72"
+
+# CDFTB-CI settings
+cdftb_ci:
+  # Target Mulliken population for constraint (number of electrons on the constrained fragment)
+  # For pentacene cation: neutral pentacene has 102 electrons, cation has 101
+  N_A: 101
+  N_B: 101

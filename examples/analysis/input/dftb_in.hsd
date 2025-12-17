@@ -119,7 +119,7 @@ Hamiltonian {
       }
     }
     Scc = Yes
-    SCCTolerance = 1e-6
+    SCCTolerance = 1e-5
     MaxSCCIterations = 1500
     ThirdOrderFull = Yes
     HubbardDerivs {
