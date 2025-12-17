@@ -1,0 +1,37 @@
+# CDFTB Analysis Settings Configuration File
+
+# Input paths (relative to this config file directory)
+input:
+  trajectory: "traj/prod.dcd"         # Trajectory file (DCD format)
+  topology: "traj/pentacene.pdb"  # Topology file (GRO/PDB/etc.)
+  qm_atoms: "traj/qmatoms"  # QM atom indices file (0-indexed)
+  pccharges_template: "input/PCcharges.dat"    # Point charges template
+  hsd_template: "input/dftb_in.hsd"            # DFTB+ HSD template
+
+# Output settings
+output:
+  directory: "output"                 # Output directory
+  energy_file: "energies.dat"         # Energy output file
+
+# Frame selection
+frames:
+  start: 0                            # First frame to process (0-indexed)
+  n_frames: null                      # Number of frames (null = all)
+  t0_fs: 0.0                          # Initial time (fs)
+  dt_fs: 4.0                          # Time step (fs) between frames
+
+# DFTB+ settings
+dftb:
+  library_path: "/home/takahashi/opt/dftb+/lib/libdftbplus.so"
+  timeout: 600                        # Timeout per calculation (seconds)
+
+# Fragment definitions for constrained DFT
+# Each fragment has:
+#   - name: identifier for the fragment
+#   - atom_range: DFTB+ style atom range (1-indexed), e.g., "1:36"
+#   - charge_sum_range: (optional) Python-style index range [start, end), auto-calculated from atom_range if omitted
+fragments:
+  - name: "fragment1"
+    atom_range: "1:36"
+  - name: "fragment2"
+    atom_range: "37:72"

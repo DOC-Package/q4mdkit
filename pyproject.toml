@@ -1,0 +1,13 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "qm4dcrystal"
+version = "0.1.0"
+description = "QM/MM tools for molecular crystals"
+requires-python = ">=3.8"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["qm4dcrystal*"]
