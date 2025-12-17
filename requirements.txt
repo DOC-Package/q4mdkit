@@ -1,5 +1,5 @@
 # ===========================================
-# qm4dcrystal - Requirements
+# qm4d4crystal - Requirements
 # ===========================================
 # Note: Some packages (dftbplus, openmm, ase) are best installed via conda.
 # See environment.yml for conda-based installation.

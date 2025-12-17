@@ -1,4 +1,4 @@
-# qm4dcrystal - QM/MM tools for molecular crystals
+# qm4d4crystal - QM/MM tools for molecular crystals
 
 from . import analysis
 from . import prep

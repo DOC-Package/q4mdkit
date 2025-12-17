@@ -15,13 +15,13 @@ import numpy as np
 from pathlib import Path
 import yaml
 
-from qm4dcrystal.analysis import (
+from qm4d4crystal.analysis import (
     UnrestrictedOrbitalData,
     build_cdftbci_hamiltonian_unrestricted,
     solve_cdftbci_unrestricted,
     compute_transfer_integral_unrestricted,
 )
-from qm4dcrystal.analysis.cdftb_result_reader import (
+from qm4d4crystal.analysis.cdftb_result_reader import (
     load_spin_polarized_calculation,
     get_orbital_info_from_eigenvec,
     get_atom_orbital_map,

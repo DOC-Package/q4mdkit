@@ -1,4 +1,4 @@
-name: qm4dcrystal
+name: qm4d4crystal
 channels:
   - conda-forge
   - defaults

@@ -3,10 +3,10 @@
 # File paths
 paths:
   sk_dir: "/home/takahashi/qmmm/sk/3ob"
-  amber_prmtop: "/workspace/qm4dcrystal/examples/pentacene333/input/pentacene.prmtop"
-  pdbfile: "/workspace/qm4dcrystal/examples/pentacene333/input/pentacene.pdb"
-  qatoms: "/workspace/qm4dcrystal/examples/pentacene333/input/qmatoms"
-  boxfile: "/workspace/qm4dcrystal/examples/pentacene333/input/pentacene.box"
+  amber_prmtop: "/workspace/qm4d4crystal/examples/pentacene333/input/pentacene.prmtop"
+  pdbfile: "/workspace/qm4d4crystal/examples/pentacene333/input/pentacene.pdb"
+  qatoms: "/workspace/qm4d4crystal/examples/pentacene333/input/qmatoms"
+  boxfile: "/workspace/qm4d4crystal/examples/pentacene333/input/pentacene.box"
 
 # Parallel settings
 parallel:

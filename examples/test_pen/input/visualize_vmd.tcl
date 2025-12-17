@@ -1,8 +1,8 @@
 # VMD visualization script for QM/MM system
-# Usage: vmd -e /home/takahashi/python/qm4dcrystal/examples/pentacene333/input/visualize_vmd.tcl
+# Usage: vmd -e /home/takahashi/python/qm4d4crystal/examples/pentacene333/input/visualize_vmd.tcl
 
 # Load structure
-mol new /home/takahashi/python/qm4dcrystal/examples/pentacene333/input/pentacene_qmmm.pdb type pdb waitfor all
+mol new /home/takahashi/python/qm4d4crystal/examples/pentacene333/input/pentacene_qmmm.pdb type pdb waitfor all
 
 # Color by B-factor (QM/MM region)
 mol delrep 0 top
