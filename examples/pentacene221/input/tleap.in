@@ -1,0 +1,11 @@
+source leaprc.gaff2
+PEN = loadmol2 pentacene_gaff2.mol2
+loadamberparams pentacene.frcmod
+
+X = loadPDB pentacene.pdb
+check X
+charge X
+#set X box {18.826 23.141 43.327}
+
+saveamberparm X pentacene.prmtop pentacene.inpcrd
+quit

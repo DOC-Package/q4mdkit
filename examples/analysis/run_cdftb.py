@@ -10,7 +10,7 @@ If no config file is specified, defaults to 'cdftb_settings.yaml' in the current
 
 import argparse
 from pathlib import Path
-from qm4d4crystal.analysis import run_cdftb_analysis
+from qm4d4crystal.analysis.cdftb import run_cdftb_analysis
 
 def main():
     

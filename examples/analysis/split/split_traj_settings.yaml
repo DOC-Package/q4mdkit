@@ -1,0 +1,8 @@
+# Split Trajectory Settings Configuration File
+
+# Paths (relative to this config file directory)
+trajectory: "prod.dcd"                # Trajectory file (DCD format)
+topology: "pentacene.pdb"             # Topology file (GRO/PDB/etc.)
+
+# Split settings
+n_splits: 2                           # Number of parts to split into

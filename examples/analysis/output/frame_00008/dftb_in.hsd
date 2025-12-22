@@ -94,5 +94,6 @@ Options {
   TimingVerbosity = 1
   WriteCharges = Yes
   WriteChargesAsText = Yes
+  WriteDetailedXml = Yes
   WriteHS = No
 }

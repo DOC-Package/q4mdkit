@@ -23,6 +23,7 @@ frames:
 # DFTB+ settings
 dftb:
   library_path: "/home/takahashi/opt/dftb+/lib/libdftbplus.so"
+  num_threads: 4                   # Number of CPU threads (null = use system default)
   timeout: 600                        # Timeout per calculation (seconds)
 
 # Fragment definitions for constrained DFT

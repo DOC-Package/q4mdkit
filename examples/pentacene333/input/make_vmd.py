@@ -4,10 +4,7 @@ Generate VMD visualization script for pentacene 3x3x3 QM/MM system
 """
 import sys
 from pathlib import Path
-from prep.visualize_qmmm import make_vmd_qmmm
-
-# Add src to path
-sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "src"))
+from qm4d4crystal.prep.visualize_qmmm import make_vmd_qmmm
 
 input_dir = Path(__file__).parent
 

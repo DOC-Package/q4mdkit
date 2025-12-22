@@ -62,6 +62,7 @@ class CDFTBConfig:
     
     # DFTB+ settings
     dftb_library_path: str = "/home/takahashi/opt/dftb+/lib/libdftbplus.so"
+    num_threads: Optional[int] = None
     timeout: int = 300
     
     # Fragment definitions
@@ -113,6 +114,7 @@ def load_config(config_path: Path) -> CDFTBConfig:
     # Parse DFTB+ settings
     dftb_cfg = data.get('dftb', {})
     dftb_library_path = dftb_cfg.get('library_path', '/home/takahashi/opt/dftb+/lib/libdftbplus.so')
+    num_threads = dftb_cfg.get('num_threads', None)
     timeout = dftb_cfg.get('timeout', 300)
     
     # Parse fragment definitions
@@ -145,6 +147,7 @@ def load_config(config_path: Path) -> CDFTBConfig:
         t0_fs=t0_fs,
         dt_fs=dt_fs,
         dftb_library_path=dftb_library_path,
+        num_threads=num_threads,
         timeout=timeout,
         fragments=fragments
     )
@@ -361,7 +364,7 @@ def setup_fragment_directory(frame_dir: Path, fragment_name: str, constrained_at
     return frag_dir
 
 
-def run_dftb_calculation(qm_coords_bohr, frame_dir, write_hs, result_queue, dftb_library_path):
+def run_dftb_calculation(qm_coords_bohr, frame_dir, write_hs, result_queue, dftb_library_path, num_threads):
     """Run DFTB+ calculation in a separate process within frame directory.
     
     Parameters:
@@ -376,8 +379,14 @@ def run_dftb_calculation(qm_coords_bohr, frame_dir, write_hs, result_queue, dftb
         Queue to return results
     dftb_library_path : str
         Path to DFTB+ library
+    num_threads : int or None
+        Number of OpenMP threads (None = use system default)
     """
     try:
+        # Set OpenMP threads if specified
+        if num_threads is not None:
+            os.environ['OMP_NUM_THREADS'] = str(num_threads)
+        
         # Change to frame directory
         original_dir = os.getcwd()
         os.chdir(frame_dir)
@@ -428,8 +437,9 @@ def run_dftb_calculation(qm_coords_bohr, frame_dir, write_hs, result_queue, dftb
         result_queue.put(("error", str(e), None))
 
 
-def run_dftb_in_subprocess(qm_coords_bohr, frame_dir, write_hs=False, timeout=300, 
-                           dftb_library_path="/home/takahashi/opt/dftb+/lib/libdftbplus.so"):
+def run_dftb_in_subprocess(qm_coords_bohr, frame_dir, write_hs=False,
+                           dftb_library_path="/home/takahashi/opt/dftb+/lib/libdftbplus.so",
+                           num_threads=None, timeout=300):
     """Run DFTB+ in a subprocess that can be killed if it hangs or crashes.
     
     Parameters:
@@ -440,13 +450,15 @@ def run_dftb_in_subprocess(qm_coords_bohr, frame_dir, write_hs=False, timeout=30
         Directory containing dftb_in.hsd
     write_hs : bool
         Whether to write Hamiltonian/Overlap matrices
-    timeout : int
-        Timeout in seconds
     dftb_library_path : str
         Path to DFTB+ library
+    num_threads : int or None
+        Number of OpenMP threads (None = use system default)
+    timeout : int
+        Timeout in seconds
     """
     result_queue = mp.Queue()
-    proc = mp.Process(target=run_dftb_calculation, args=(qm_coords_bohr, frame_dir, write_hs, result_queue, dftb_library_path))
+    proc = mp.Process(target=run_dftb_calculation, args=(qm_coords_bohr, frame_dir, write_hs, result_queue, dftb_library_path, num_threads))
     proc.start()
     proc.join(timeout=timeout)
     
@@ -579,7 +591,9 @@ def run_cdftb_analysis(config_path: Path):
                 
                 energy, mcharge, error = run_dftb_in_subprocess(
                     qm_coords_bohr, frag_dir, write_hs=False,
-                    timeout=config.timeout, dftb_library_path=config.dftb_library_path
+                    dftb_library_path=config.dftb_library_path,
+                    num_threads=config.num_threads,
+                    timeout=config.timeout
                 )
                 
                 if error:
@@ -612,7 +626,9 @@ def run_cdftb_analysis(config_path: Path):
                     # WriteHS calculation
                     energy_hs, _, error_hs = run_dftb_in_subprocess(
                         qm_coords_bohr, frag_dir, write_hs=True,
-                        timeout=config.timeout, dftb_library_path=config.dftb_library_path
+                        dftb_library_path=config.dftb_library_path,
+                        num_threads=config.num_threads,
+                        timeout=config.timeout
                     )
                     if error_hs:
                         print(f"    WriteHS: {error_hs}")
