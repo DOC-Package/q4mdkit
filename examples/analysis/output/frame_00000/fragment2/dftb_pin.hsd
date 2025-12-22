@@ -179,14 +179,14 @@ ParserOptions = {
 }
 Options = {
   WriteDetailedOut = Yes
-  WriteAutotestTag = Yes
+  WriteDetailedXml = Yes
+  WriteAutotestTag = No
   WriteResultsTag = No
   RestartFrequency = 20
   RandomSeed = 0
   TimingVerbosity = 1
   WriteCharges = Yes
   WriteChargesAsText = Yes
-  WriteDetailedXml = Yes
   WriteHS = Yes
   ReadChargesAsText = Yes
   WriteRealHS = No

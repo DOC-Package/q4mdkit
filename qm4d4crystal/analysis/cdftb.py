@@ -457,10 +457,22 @@ def run_dftb_in_subprocess(qm_coords_bohr, frame_dir, write_hs=False,
     timeout : int
         Timeout in seconds
     """
+    # Set OpenMP threads in parent process before forking
+    # This ensures child process inherits the correct environment
+    old_omp_threads = os.environ.get('OMP_NUM_THREADS')
+    if num_threads is not None:
+        os.environ['OMP_NUM_THREADS'] = str(num_threads)
+    
     result_queue = mp.Queue()
     proc = mp.Process(target=run_dftb_calculation, args=(qm_coords_bohr, frame_dir, write_hs, result_queue, dftb_library_path, num_threads))
     proc.start()
     proc.join(timeout=timeout)
+    
+    # Restore original OMP_NUM_THREADS
+    if old_omp_threads is not None:
+        os.environ['OMP_NUM_THREADS'] = old_omp_threads
+    elif num_threads is not None:
+        del os.environ['OMP_NUM_THREADS']
     
     if proc.is_alive():
         # Timeout - kill the process

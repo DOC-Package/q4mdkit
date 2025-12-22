@@ -74,6 +74,7 @@ Geometry {
     H 8.8547095521 6.7087018559 21.7624889083
     H 11.0875949001 7.6015538032 25.3391532621
     H 9.0522879542 6.6820163115 24.1956727893
+    
   }
 }
 Hamiltonian {
@@ -81,6 +82,12 @@ Hamiltonian {
     SpinPolarisation {
       Colinear {
         UnpairedElectrons = 1
+        InitialSpins {
+          AtomSpin {
+            Atoms = 1:36
+            SpinPerAtom = 0.028
+          }
+        }
       }
     }
     SpinConstants {
@@ -137,14 +144,14 @@ Hamiltonian {
       MaxConstrIterations = 200
       ConvergentConstrOnly = Yes
     }
-    ReadInitialCharges = Yes
+    ReadInitialCharges = No
   }
 }
 Analysis {
   PrintForces = No
   WriteEigenvectors = Yes
   EigenvectorsAsText = Yes
-  WriteBandOut = No
+  WriteBandOut = Yes
   MullikenAnalysis = Yes
   WriteNetCharges = Yes
 }
@@ -153,6 +160,7 @@ ParserOptions {
 }
 Options {
   WriteDetailedOut = Yes
+  WriteDetailedXml = Yes
   WriteAutotestTag = No
   WriteResultsTag = No
   RestartFrequency = 20
@@ -160,7 +168,5 @@ Options {
   TimingVerbosity = 1
   WriteCharges = Yes
   WriteChargesAsText = Yes
-  WriteDetailedXml = Yes
-  WriteHS = Yes
-  ReadChargesAsText = Yes
+  WriteHS = No
 }

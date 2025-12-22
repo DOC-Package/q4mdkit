@@ -2,3 +2,4 @@
 # Qn|calcm = charge on fragment n when constraint applied to fragment m
 # Frame      Time[fs]      Q1|calc1      Q2|calc1      Q1|calc2      Q2|calc2
     0         0.000     +0.999906     +0.000094     -0.000083     +1.000083
+    1         4.000     +0.999910     +0.000090     -0.000082     +1.000082

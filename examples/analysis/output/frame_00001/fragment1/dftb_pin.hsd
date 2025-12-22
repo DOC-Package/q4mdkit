@@ -77,10 +77,6 @@ H 9.0693021462 6.6879365074 24.1918393729
 Hamiltonian = DFTB {
   SpinPolarisation = Colinear {
     UnpairedElectrons = 1
-    InitialSpins = AtomSpin {
-      Atoms = 1:36
-      SpinPerAtom = 0.028
-    }
     RelaxTotalSpin = No
   }
   SpinConstants = {
@@ -137,12 +133,11 @@ Hamiltonian = DFTB {
     MaxConstrIterations = 200
     ConvergentConstrOnly = Yes
   }
-  ReadInitialCharges = No
+  ReadInitialCharges = Yes
   PolynomialRepulsive = {}
   Hybrid = None {}
   ShellResolvedSCC = No
   OldSKInterpolation = No
-  InitialCharges = {}
   ConvergentSCCOnly = Yes
   Solver = RelativelyRobust {}
   OnSiteCorrection = {}
@@ -170,7 +165,7 @@ Analysis = {
   PrintForces = No
   WriteEigenvectors = Yes
   EigenvectorsAsText = Yes
-  WriteBandOut = Yes
+  WriteBandOut = No
   MullikenAnalysis = Yes
   WriteNetCharges = Yes
   ProjectStates = {}
@@ -184,18 +179,20 @@ ParserOptions = {
 }
 Options = {
   WriteDetailedOut = Yes
-  WriteAutotestTag = Yes
-  WriteResultsTag = Yes
+  WriteDetailedXml = Yes
+  WriteAutotestTag = No
+  WriteResultsTag = No
   RestartFrequency = 20
   RandomSeed = 0
   TimingVerbosity = 1
   WriteCharges = Yes
   WriteChargesAsText = Yes
-  WriteDetailedXml = Yes
-  WriteHS = No
+  WriteHS = Yes
+  ReadChargesAsText = Yes
   WriteRealHS = No
   MinimiseMemoryUsage = No
   ShowFoldedCoords = No
+  SkipChargeTest = No
   BinaryAccessTypes = {
  "stream"
   }
