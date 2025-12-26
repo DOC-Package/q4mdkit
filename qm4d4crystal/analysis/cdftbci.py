@@ -984,13 +984,22 @@ def run_cdftbci_analysis(config_path: Path) -> None:
     n_frames = energies_data.shape[0]
     print(f"\nFound {n_frames} frames in energies.dat")
     
-    # Prepare output file
+    # Prepare output files
+    # 1. Main results file (final energies and coupling)
     ci_output_file = output_dir / "cdftbci.dat"
+    # 2. Sub values file (overlaps, weight matrices, etc.)
+    ci_sub_file = output_dir / "cdftbci_sub.dat"
     
     with open(ci_output_file, 'w') as f:
-        f.write("# CDFTB-CI Results\n")
-        f.write("# Frame  Time(fs)      E_A(Ha)      E_B(Ha)        V_A(Ha)        V_B(Ha)        S_AB        "
-                "H_AB(Ha)        J_direct(meV)   J_lowdin(meV)        E1(Ha)        E2(Ha)        dE(eV)\n")
+        f.write("# CDFTB-CI Final Results\n")
+        f.write("# Frame  Time(fs)   J_lowdin(meV)        E1(Ha)        E2(Ha)        dE(eV)\n")
+    
+    with open(ci_sub_file, 'w') as f:
+        f.write("# CDFTB-CI Sub Values\n")
+        f.write("# Frame  Time(fs)      E_A(Ha)      E_B(Ha)        H_AB(Ha)        J_direct(meV)        "
+                "V_A(Ha)        V_B(Ha)      N_A      N_B        S_AB        "
+                "S_AB_alpha      S_AB_beta        W_BA        W_BA_alpha      W_BA_beta        "
+                "W_AB        W_AB_alpha      W_AB_beta\n")
     
     # Process each frame
     for i in range(n_frames):
@@ -1092,12 +1101,20 @@ def run_cdftbci_analysis(config_path: Path) -> None:
             print(f"  E1 = {eigenvalues[0]:.6f} Ha, E2 = {eigenvalues[1]:.6f} Ha")
             print(f"  ΔE = {dE_eV:.4f} eV")
             
-            # Write results
+            # Write final results (J_lowdin and adiabatic energies)
             with open(ci_output_file, 'a') as f:
+                f.write(f"{frame_id:5d}  {time_fs:8.2f}  {J_lowdin_meV:12.4f}  "
+                        f"{eigenvalues[0]:16.10f}  {eigenvalues[1]:16.10f}  {dE_eV:10.6f}\n")
+            
+            # Write sub values (diabatic energies, coupling, overlaps, weight matrices, constraint potentials)
+            with open(ci_sub_file, 'a') as f:
                 f.write(f"{frame_id:5d}  {time_fs:8.2f}  {E_A:14.10f}  {E_B:14.10f}  "
-                        f"{V_A:12.10f}  {V_B:12.10f}  {ham.S_AB:12.10f}  {ham.H_AB:14.10f}  "
-                        f"{J_direct_meV:12.10f}  {J_lowdin_meV:12.10f}  "
-                        f"{eigenvalues[0]:14.10f}  {eigenvalues[1]:14.10f}  {dE_eV:12.6f}\n")
+                        f"{ham.H_AB:14.10f}  {J_direct_meV:12.4f}  "
+                        f"{V_A:14.10f}  {V_B:14.10f}  "
+                        f"{N_A:6.1f}  {N_B:6.1f}  {ham.S_AB:14.10f}  "
+                        f"{ham.S_AB_alpha:14.10f}  {ham.S_AB_beta:14.10f}  "
+                        f"{ham.W_BA:14.10f}  {ham.W_BA_alpha:14.10f}  {ham.W_BA_beta:14.10f}  "
+                        f"{ham.W_AB:14.10f}  {ham.W_AB_alpha:14.10f}  {ham.W_AB_beta:14.10f}\n")
             
         except Exception as e:
             print(f"  ERROR: {e}")
@@ -1106,5 +1123,6 @@ def run_cdftbci_analysis(config_path: Path) -> None:
             continue
     
     print("\n" + "=" * 70)
-    print(f"Results saved to {ci_output_file}")
+    print(f"Final results saved to {ci_output_file}")
+    print(f"Sub values saved to {ci_sub_file}")
     print("=" * 70)
