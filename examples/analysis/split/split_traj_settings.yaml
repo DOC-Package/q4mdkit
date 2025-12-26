@@ -1,8 +1,19 @@
 # Split Trajectory Settings Configuration File
 
 # Paths (relative to this config file directory)
-trajectory: "prod.dcd"                # Trajectory file (DCD format)
-topology: "pentacene.pdb"             # Topology file (GRO/PDB/etc.)
+trajectory: "nve.dcd"                # Trajectory file (DCD format)
+topology: "pentacene.pdb"            # Topology file (GRO/PDB/etc.)
 
 # Split settings
-n_splits: 2                           # Number of parts to split into
+n_splits: 100                        # Number of parts to split into
+
+# Frame range settings
+start_frame: 0                       # Starting frame index (0-indexed)
+n_frames: null                       # Number of frames to process (null = all)
+
+# QM Energy file splitting (optional)
+energy:
+  enabled: true                      # Enable energy file splitting
+  file: "qm_energy.dat"              # Path to qm_energy.dat file
+  energy_interval: 1                 # Energy output interval in fs
+  sample_interval: 4                 # DCD trajectory sample interval in fs

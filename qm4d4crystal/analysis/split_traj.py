@@ -1,153 +1,167 @@
 """
-Split a DCD trajectory file into multiple parts.
+Trajectory splitting module.
 
-Usage:
-    python split_dcd.py input.dcd topology.gro -n 5
-    python split_dcd.py input.dcd topology.gro -n 5 -o output_dir
+Splits DCD trajectory files into multiple parts for parallel processing.
+Supports skipping initial equilibration frames and limiting total frames.
 """
 
+import os
 import argparse
 import mdtraj as md
-from pathlib import Path
-import numpy as np
+from typing import Optional
 
 
-def get_n_frames(traj_path: str, top_path: str) -> int:
-    """Get total number of frames without loading entire trajectory."""
-    # Load just first frame to get structure info
-    traj = md.load_frame(str(traj_path), 0, top=str(top_path))
+def get_n_frames(trajectory_path: str) -> int:
+    """Get the number of frames in a trajectory file.
     
-    # Count frames by iterating (memory efficient)
-    n_frames = 0
-    for chunk in md.iterload(str(traj_path), top=str(top_path), chunk=100):
-        n_frames += chunk.n_frames
-    return n_frames
-
-
-def split_trajectory(traj_path: str, top_path: str, n_splits: int, output_dir: str = None):
+    Parameters
+    ----------
+    trajectory_path : str
+        Path to the trajectory file (DCD format).
+    
+    Returns
+    -------
+    int
+        Number of frames in the trajectory.
     """
-    Split a DCD trajectory into n_splits equal parts.
-    Memory-efficient: processes trajectory in chunks.
+    traj = md.load(trajectory_path, top=None)
+    return traj.n_frames
+
+
+def split_trajectory(
+    trajectory_path: str,
+    topology_path: str,
+    n_splits: int,
+    output_dir: str,
+    start_frame: int = 0,
+    n_frames: Optional[int] = None
+) -> list[str]:
+    """Split a trajectory file into multiple parts.
     
-    Parameters:
-    -----------
-    traj_path : str
-        Path to input DCD trajectory file
-    top_path : str
-        Path to topology file (gro, pdb, etc.)
+    Parameters
+    ----------
+    trajectory_path : str
+        Path to the trajectory file (DCD format).
+    topology_path : str
+        Path to the topology file (PDB or GRO format).
     n_splits : int
-        Number of parts to split into
-    output_dir : str, optional
-        Output directory (default: same as input)
+        Number of parts to split the trajectory into.
+    output_dir : str
+        Directory to save the split trajectory files.
+    start_frame : int, optional
+        Starting frame index (0-indexed). Default is 0.
+        Use this to skip initial equilibration frames.
+    n_frames : int, optional
+        Number of frames to process from start_frame.
+        If None, process all remaining frames.
+    
+    Returns
+    -------
+    list[str]
+        List of paths to the split trajectory files.
+    
+    Example
+    -------
+    # Skip first 100 frames and process next 1000 frames, split into 10 parts
+    >>> split_trajectory("prod.dcd", "prod.pdb", 10, "split", start_frame=100, n_frames=1000)
     """
-    traj_path = Path(traj_path)
-    top_path = Path(top_path)
+    os.makedirs(output_dir, exist_ok=True)
     
-    if output_dir is None:
-        output_dir = traj_path.parent
-    else:
-        output_dir = Path(output_dir)
-        output_dir.mkdir(parents=True, exist_ok=True)
+    # Load full trajectory
+    traj = md.load(trajectory_path, top=topology_path)
+    total_frames = traj.n_frames
     
-    print(f"Loading trajectory: {traj_path}")
-    print(f"Topology: {top_path}")
+    # Determine frame range
+    if start_frame >= total_frames:
+        raise ValueError(f"start_frame ({start_frame}) >= total frames ({total_frames})")
     
-    # Get total frames (memory efficient)
-    print("Counting frames...")
-    n_frames = get_n_frames(str(traj_path), str(top_path))
-    print(f"Total frames: {n_frames}")
-    print(f"Splitting into {n_splits} parts")
+    end_frame = total_frames
+    if n_frames is not None:
+        end_frame = min(start_frame + n_frames, total_frames)
     
-    if n_splits > n_frames:
-        raise ValueError(f"Cannot split {n_frames} frames into {n_splits} parts")
+    actual_frames = end_frame - start_frame
+    print(f"Trajectory: {total_frames} total frames")
+    print(f"Processing: frames {start_frame} to {end_frame-1} ({actual_frames} frames)")
     
-    # Calculate frame ranges for each split
-    frames_per_split = n_frames // n_splits
-    remainder = n_frames % n_splits
+    # Calculate frames per split
+    frames_per_split = actual_frames // n_splits
+    remainder = actual_frames % n_splits
     
-    split_ranges = []
-    start = 0
+    output_paths = []
+    current_frame = start_frame
+    
     for i in range(n_splits):
-        n_this = frames_per_split + (1 if i < remainder else 0)
-        split_ranges.append((start, start + n_this))
-        start += n_this
+        # Distribute remainder frames across first splits
+        split_frames = frames_per_split + (1 if i < remainder else 0)
+        
+        if split_frames == 0:
+            continue
+        
+        # Extract frames for this split
+        split_traj = traj[current_frame:current_frame + split_frames]
+        
+        # Save split trajectory
+        output_path = os.path.join(output_dir, f"traj_part{i+1:02d}.dcd")
+        split_traj.save_dcd(output_path)
+        output_paths.append(output_path)
+        
+        print(f"Part {i+1}: frames {current_frame}-{current_frame + split_frames - 1} "
+              f"({split_frames} frames) -> {output_path}")
+        
+        current_frame += split_frames
     
-    print(f"Frames per split: ~{frames_per_split}")
-    print("-" * 50)
-    
-    # Base name for output files
-    base_name = traj_path.stem
-    
-    # Process each split
-    for i, (start_frame, end_frame) in enumerate(split_ranges):
-        output_file = output_dir / f"{base_name}_part{i+1:02d}.dcd"
-        n_frames_this = end_frame - start_frame
-        
-        print(f"Part {i+1}/{n_splits}: frames {start_frame}-{end_frame-1} ({n_frames_this} frames)")
-        
-        # Collect frames for this split
-        frames_collected = []
-        current_frame = 0
-        
-        for chunk in md.iterload(str(traj_path), top=str(top_path), chunk=100):
-            chunk_start = current_frame
-            chunk_end = current_frame + chunk.n_frames
-            
-            # Check if this chunk overlaps with our target range
-            if chunk_end > start_frame and chunk_start < end_frame:
-                # Calculate local indices within this chunk
-                local_start = max(0, start_frame - chunk_start)
-                local_end = min(chunk.n_frames, end_frame - chunk_start)
-                
-                frames_collected.append(chunk[local_start:local_end])
-            
-            current_frame = chunk_end
-            
-            # Stop if we've passed our target range
-            if current_frame >= end_frame:
-                break
-        
-        # Join and save
-        if frames_collected:
-            traj_split = md.join(frames_collected)
-            traj_split.save_dcd(str(output_file))
-            print(f"  -> Saved: {output_file.name}")
-        
-    print("-" * 50)
-    print(f"Done! {n_splits} DCD files saved to {output_dir}")
+    print(f"\nSplit into {len(output_paths)} files")
+    return output_paths
 
 
 def main():
+    """CLI for trajectory splitting."""
     parser = argparse.ArgumentParser(
-        description="Split a DCD trajectory file into multiple parts"
+        description="Split trajectory files into multiple parts"
     )
     parser.add_argument(
-        "trajectory",
-        help="Input DCD trajectory file"
+        "-t", "--trajectory",
+        required=True,
+        help="Path to trajectory file (DCD)"
     )
     parser.add_argument(
-        "topology",
-        help="Topology file (gro, pdb, etc.)"
+        "-p", "--topology",
+        required=True,
+        help="Path to topology file (PDB/GRO)"
     )
     parser.add_argument(
-        "-n", "--n_splits",
+        "-n", "--n-splits",
         type=int,
         required=True,
-        help="Number of parts to split into"
+        help="Number of splits"
     )
     parser.add_argument(
-        "-o", "--output",
+        "-o", "--output-dir",
+        default="split",
+        help="Output directory (default: split)"
+    )
+    parser.add_argument(
+        "--start-frame",
+        type=int,
+        default=0,
+        help="Starting frame index (0-indexed, default: 0)"
+    )
+    parser.add_argument(
+        "--n-frames",
+        type=int,
         default=None,
-        help="Output directory (default: same as input)"
+        help="Number of frames to process (default: all)"
     )
     
     args = parser.parse_args()
     
     split_trajectory(
-        args.trajectory,
-        args.topology,
-        args.n_splits,
-        args.output
+        trajectory_path=args.trajectory,
+        topology_path=args.topology,
+        n_splits=args.n_splits,
+        output_dir=args.output_dir,
+        start_frame=args.start_frame,
+        n_frames=args.n_frames
     )
 
 

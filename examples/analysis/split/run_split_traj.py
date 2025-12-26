@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Split trajectory script.
+Split trajectory and energy file script.
 
 Usage:
     python run_split_traj.py [config.yaml]
@@ -14,6 +14,7 @@ from pathlib import Path
 import yaml
 
 from qm4d4crystal.analysis.split_traj import split_trajectory
+from qm4d4crystal.analysis.split_energy import split_energy_file
 
 
 def main():
@@ -45,19 +46,54 @@ def main():
     output_dir = traj_path.parent  # Output to the same directory as trajectory
     n_splits = config.get('n_splits', 2)
     
+    # Frame range settings
+    start_frame = config.get('start_frame', 0)
+    n_frames = config.get('n_frames', None)
+    
+    # Parse energy file settings (optional)
+    energy_cfg = config.get('energy', {})
+    energy_enabled = energy_cfg.get('enabled', False)
+    
     print(f"Running trajectory split with config: {config_path}")
     print(f"  Trajectory: {traj_path}")
     print(f"  Topology: {top_path}")
     print(f"  Output directory: {output_dir}")
     print(f"  Number of splits: {n_splits}")
+    print(f"  Start frame: {start_frame}")
+    print(f"  N frames: {n_frames if n_frames else 'all'}")
     print()
     
+    # Split trajectory
     split_trajectory(
-        str(traj_path),
-        str(top_path),
-        n_splits,
-        str(output_dir)
+        trajectory_path=str(traj_path),
+        topology_path=str(top_path),
+        n_splits=n_splits,
+        output_dir=str(output_dir),
+        start_frame=start_frame,
+        n_frames=n_frames,
     )
+    
+    # Split energy file if enabled
+    if energy_enabled:
+        energy_file = energy_cfg.get('file', 'qm_energy.dat')
+        energy_path = str(base_dir / energy_file)
+        energy_interval = energy_cfg.get('energy_interval', 1)
+        sample_interval = energy_cfg.get('sample_interval', 1)
+        
+        print(f"\nSplitting energy file: {energy_path}")
+        print(f"  Energy interval: {energy_interval} fs")
+        print(f"  Sample interval: {sample_interval} fs")
+        print()
+        
+        split_energy_file(
+            energy_path=energy_path,
+            n_splits=n_splits,
+            output_dir=str(output_dir),
+            energy_interval=energy_interval,
+            sample_interval=sample_interval,
+            start_frame=start_frame,
+            n_frames=n_frames,
+        )
 
 
 if __name__ == "__main__":

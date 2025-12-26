@@ -2,12 +2,23 @@
 """
 CDFTB-CI analysis script.
 
-Compute the CDFTB-CI Hamiltonian and transfer integrals from CDFTB output.
+Perform CDFTB calculations with online CDFTB-CI calculation for each frame.
+
+This script performs:
+1. CDFTB calculations for each fragment (constrained DFT-B)
+2. CDFTB-CI calculation immediately after (on-the-fly)
+3. Spin population analysis
+
+Features:
+- Uses a single working directory (reused for each frame)
+- No H/S matrix storage needed  
+- Significantly reduced disk usage
+- Optional charge continuation between frames
 
 Usage:
     python run_cdftbci.py [config.yaml]
 
-If no config file is specified, defaults to 'cdftb_settings.yaml' in the current directory.
+Default config file: cdftb_settings.yaml
 """
 
 import argparse
@@ -18,7 +29,7 @@ from qm4d4crystal.analysis.cdftbci import run_cdftbci_analysis
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Run CDFTB-CI analysis on MD trajectory"
+        description="Run CDFTB with online CDFTB-CI calculation"
     )
     parser.add_argument(
         "config",

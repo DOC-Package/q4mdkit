@@ -162,8 +162,9 @@ def load_config(config_path: Path) -> CDFTBConfig:
 # Global config object (set by run_cdftb_analysis)
 _config: Optional[CDFTBConfig] = None
 
-def load_qm_indices(path: Path):
+def load_qm_indices(path):
     """Return 0-indexed NumPy array of QM atoms (file is already 0-indexed)."""
+    path = Path(path)
     if not path.exists():
         raise FileNotFoundError(f"QM atom file not found: {path}")
     tokens = path.read_text().split()
@@ -414,8 +415,10 @@ def run_dftb_calculation(qm_coords_bohr, frame_dir, write_hs, result_queue, dftb
                 if 'Colinear' in spin_pol and 'InitialSpins' in spin_pol['Colinear']:
                     del spin_pol['Colinear']['InitialSpins']
         else:
+            # SCC calculation: output charges as text for subsequent WriteHS calculation
             data['Hamiltonian']['DFTB']['ReadInitialCharges'] = 'No'
             data['Options']['WriteHS'] = 'No'
+            data['Options']['WriteChargesAsText'] = 'Yes'  # Output charges.dat for WriteHS
             if 'ReadChargesAsText' in data['Options']:
                 del data['Options']['ReadChargesAsText']
         
@@ -427,7 +430,7 @@ def run_dftb_calculation(qm_coords_bohr, frame_dir, write_hs, result_queue, dftb
             hsdpath="dftb_in.hsd",
             logfile="dftb.log",
         )
-        # Set geometry triggers the SCF calculation
+        # Set geometry triggers the SCC calculation
         cdftb.set_geometry(qm_coords_bohr)
         energy = cdftb.get_energy()
         mcharge = cdftb.get_gross_charges()
@@ -498,212 +501,3 @@ def run_dftb_in_subprocess(qm_coords_bohr, frame_dir, write_hs=False,
         return energy_or_error, mcharge, None
     else:
         return None, None, energy_or_error
-
-
-def run_cdftb_analysis(config_path: Path):
-    """
-    Run constrained DFT-B analysis using settings from YAML config file.
-    
-    Parameters:
-    -----------
-    config_path : Path
-        Path to YAML configuration file
-    """
-    # Load configuration
-    config = load_config(config_path)
-    
-    print("=" * 70)
-    print("CDFTB Analysis")
-    print("=" * 70)
-    print(f"Config file: {config_path}")
-    print(f"Trajectory: {config.traj_path}")
-    print(f"Topology: {config.topology_path}")
-    print(f"Output directory: {config.output_dir}")
-    print("=" * 70)
-    
-    qm_indices = load_qm_indices(config.qm_atoms_file)
-    print(f"Loaded {len(qm_indices)} QM atom indices from {config.qm_atoms_file}")
-    print(f"QM atoms (0-indexed): {qm_indices}")
-
-    # Load total atoms from topology to get MM indices
-    traj_info = md.load(str(config.traj_path), top=str(config.topology_path), frame=0)
-    total_atoms = traj_info.n_atoms
-    mm_indices = load_mm_indices(qm_indices, total_atoms)
-    print(f"MM atoms: {len(mm_indices)}")
-
-    # Load original charges from PCcharges.dat
-    mm_charges = load_pccharges(config.pccharges_template)
-    print(f"Loaded {len(mm_charges)} point charges from {config.pccharges_template}")
-    
-    # Extract atom types from HSD template for xyz file generation
-    atom_types = extract_atom_types_from_hsd(config.hsd_template)
-    print(f"Extracted {len(atom_types)} atom types from HSD template")
-    
-    # Print fragment information
-    print(f"\nFragments ({len(config.fragments)}):")
-    for frag in config.fragments:
-        print(f"  - {frag.name}: atoms {frag.atom_range}, charge sum range {frag.charge_sum_range}")
-    print()
-
-    # Create output directory and open energy file
-    config.output_dir.mkdir(parents=True, exist_ok=True)
-    
-    # Build header for energy file
-    energy_header_parts = ["# Frame", "Time[fs]"]
-    for frag in config.fragments:
-        energy_header_parts.append(f"Energy_{frag.name}[a.u.]")
-    energy_header = "  ".join(energy_header_parts) + "\n"
-    
-    # Build header for charge file
-    # Format: Qn|calcm = charge on fragment n when constraint applied to fragment m
-    charge_header_lines = []
-    charge_header_lines.append("# Mulliken charges from constrained DFT calculations")
-    charge_header_lines.append("# Qn|calcm = charge on fragment n when constraint applied to fragment m")
-    charge_header_parts = [f"{'# Frame':>7s}", f"{'Time[fs]':>12s}"]
-    for i, frag in enumerate(config.fragments, 1):
-        for j, frag2 in enumerate(config.fragments, 1):
-            charge_header_parts.append(f"{'Q' + str(j) + '|calc' + str(i):>12s}")
-    charge_header_lines.append("  ".join(charge_header_parts))
-    charge_header = "\n".join(charge_header_lines) + "\n"
-    
-    energy_file = open(config.energy_file, "w")
-    energy_file.write(energy_header)
-    charge_file = open(config.charge_file, "w")
-    charge_file.write(charge_header)
-
-    try:
-        # Track frame count for n_frames limit
-        processed_count = 0
-        
-        for frame_id, time_fs, qm_coords_bohr, mm_coords_ang in iter_qm_coordinates(
-            config.traj_path, config.topology_path, qm_indices, mm_indices
-        ):
-            # Skip frames before start_frame
-            if frame_id < config.start_frame:
-                continue
-            
-            # Stop if we've processed enough frames
-            if config.n_frames is not None and processed_count >= config.n_frames:
-                break
-            
-            # Convert QM coords to Angstrom for saving
-            qm_coords_ang = qm_coords_bohr / BOHR_PER_ANG
-            
-            # Setup frame directory with input files
-            frame_dir = setup_frame_directory(frame_id, qm_coords_ang, mm_coords_ang, mm_charges, time_fs, config, atom_types)
-            
-            # Calculate time using user-defined t0 and dt
-            time_val = config.t0_fs + frame_id * config.dt_fs
-            time_str = f"t = {time_val:.3f} fs"
-            
-            print(f"Frame {frame_id:05d} ({time_str})")
-            
-            # Process each fragment from config
-            energies = []
-            charges = []
-            
-            for frag in config.fragments:
-                frag_dir = setup_fragment_directory(
-                    frame_dir, frag.name, frag.atom_range, config.hsd_template
-                )
-                
-                energy, mcharge, error = run_dftb_in_subprocess(
-                    qm_coords_bohr, frag_dir, write_hs=False,
-                    dftb_library_path=config.dftb_library_path,
-                    num_threads=config.num_threads,
-                    timeout=config.timeout
-                )
-                
-                if error:
-                    print(f"  {frag.name}: ERROR - {error}")
-                    frag_charge = float("nan")
-                    energy = float("nan")
-                    all_frag_charges = [float("nan")] * len(config.fragments)
-                else:
-                    start_idx, end_idx = frag.charge_sum_range
-                    frag_charge = float(np.sum(mcharge[start_idx:end_idx]))
-                    # Calculate charges for all fragments
-                    all_frag_charges = []
-                    for f in config.fragments:
-                        s, e = f.charge_sum_range
-                        all_frag_charges.append(float(np.sum(mcharge[s:e])))
-                    charges_str = ", ".join([f"Q_{f.name}={q:+.6f}" for f, q in zip(config.fragments, all_frag_charges)])
-                    print(f"  {frag.name}: E = {energy:.10f} a.u., {charges_str}")
-                    
-                    # Rename detailed.out and dftb.log to preserve them before WriteHS calculation
-                    detailed_out = frag_dir / "detailed.out"
-                    detailed_out_saved = frag_dir / "detailed_scc.out"
-                    if detailed_out.exists():
-                        shutil.move(detailed_out, detailed_out_saved)
-                    
-                    dftb_log = frag_dir / "dftb.log"
-                    dftb_log_saved = frag_dir / "dftb_scc.log"
-                    if dftb_log.exists():
-                        shutil.move(dftb_log, dftb_log_saved)
-                    
-                    # WriteHS calculation
-                    energy_hs, _, error_hs = run_dftb_in_subprocess(
-                        qm_coords_bohr, frag_dir, write_hs=True,
-                        dftb_library_path=config.dftb_library_path,
-                        num_threads=config.num_threads,
-                        timeout=config.timeout
-                    )
-                    if error_hs:
-                        print(f"    WriteHS: {error_hs}")
-                    else:
-                        print(f"    WriteHS: OK")
-                
-                energies.append(energy)
-                charges.append(all_frag_charges)
-            
-            # Save to energy file
-            energy_parts = [f"{frame_id:5d}", f"{time_val:12.3f}"]
-            for e in energies:
-                energy_parts.append(f"{e:18.10f}")
-            energy_file.write("  ".join(energy_parts) + "\n")
-            energy_file.flush()
-            
-            # Save to charge file
-            charge_parts = [f"{frame_id:5d}", f"{time_val:12.3f}"]
-            for qs in charges:
-                for q in qs:
-                    charge_parts.append(f"{q:+12.6f}")
-            charge_file.write("  ".join(charge_parts) + "\n")
-            charge_file.flush()
-            
-            processed_count += 1
-            print()
-
-    finally:
-        energy_file.close()
-        charge_file.close()
-        print(f"Energies saved to {config.energy_file}")
-        print(f"Charges saved to {config.charge_file}")
-
-
-def main():
-    """Main entry point for command-line usage."""
-    import argparse
-    
-    parser = argparse.ArgumentParser(
-        description="Run constrained DFT-B analysis on MD trajectory"
-    )
-    parser.add_argument(
-        "config",
-        nargs="?",
-        default="cdftb_settings.yaml",
-        help="Path to YAML configuration file (default: cdftb_settings.yaml)"
-    )
-    args = parser.parse_args()
-    
-    config_path = Path(args.config).resolve()
-    if not config_path.exists():
-        print(f"Error: Configuration file not found: {config_path}")
-        return 1
-    
-    run_cdftb_analysis(config_path)
-    return 0
-
-
-if __name__ == "__main__":
-    exit(main())
