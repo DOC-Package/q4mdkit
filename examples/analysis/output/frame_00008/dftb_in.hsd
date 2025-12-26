@@ -87,13 +87,13 @@ ParserOptions {
 }
 Options {
   WriteDetailedOut = Yes
+  WriteDetailedXml = Yes
   WriteAutotestTag = No
-  WriteResultsTag = Yes
+  WriteResultsTag = No
   RestartFrequency = 20
   RandomSeed = 0
   TimingVerbosity = 1
   WriteCharges = Yes
   WriteChargesAsText = Yes
-  WriteDetailedXml = Yes
   WriteHS = No
 }

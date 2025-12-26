@@ -5,7 +5,7 @@ Calculation with static geometry
 
 ********************************************************************************
  iSCC Total electronic   Diff electronic      SCC error    
-   15   -0.86307870E+02    0.14007527E-06    0.50794819E-05
+   15   -0.86307870E+02    0.14007534E-06    0.50794820E-05
 ********************************************************************************
 
  Total charge:     1.00000000
@@ -967,10 +967,10 @@ Orbital populations (down)
 
 Spin  up
 Fermi level:                        -0.1969019902 H           -5.3580 eV
-Band energy:                       -45.5205002066 H        -1238.6758 eV
+Band energy:                       -45.5205002065 H        -1238.6758 eV
 TS:                                  0.0000000000 H            0.0000 eV
-Band free energy (E-TS):           -45.5205002066 H        -1238.6758 eV
-Extrapolated E(0K):                -45.5205002066 H        -1238.6758 eV
+Band free energy (E-TS):           -45.5205002065 H        -1238.6758 eV
+Extrapolated E(0K):                -45.5205002065 H        -1238.6758 eV
 Input / Output electrons (up):    102.0000000003    102.0000000000
 
 Spin  down

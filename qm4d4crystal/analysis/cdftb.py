@@ -37,6 +37,7 @@ class FragmentConfig:
     name: str
     atom_range: str  # DFTB+ style, e.g., "1:36"
     charge_sum_range: List[int]  # Python-style [start, end)
+    initial_charges: Optional[Path] = None  # Path to initial charges.dat for first frame
 
 
 @dataclass
@@ -126,10 +127,15 @@ def load_config(config_path: Path) -> CDFTBConfig:
             charge_sum_range = frag_data['charge_sum_range']
         else:
             charge_sum_range = parse_atom_range(atom_range)
+        # Parse initial_charges path if provided
+        initial_charges = None
+        if 'initial_charges' in frag_data:
+            initial_charges = base_dir / frag_data['initial_charges']
         frag = FragmentConfig(
             name=frag_data['name'],
             atom_range=atom_range,
-            charge_sum_range=charge_sum_range
+            charge_sum_range=charge_sum_range,
+            initial_charges=initial_charges
         )
         fragments.append(frag)
     

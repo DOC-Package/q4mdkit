@@ -1,0 +1,66 @@
+# CDFTB with Online CDFTB-CI Analysis Settings
+# This config file is for the combined CDFTB + CI workflow that
+# computes transfer integrals on-the-fly without storing H/S matrices.
+
+# Input paths (relative to this config file directory)
+input:
+  trajectory: "traj/prod.dcd"         # Trajectory file (DCD format)
+  topology: "traj/pentacene.pdb"      # Topology file (GRO/PDB/etc.)
+  qm_atoms: "traj/qmatoms"            # QM atom indices file (0-indexed)
+  pccharges_template: "input/PCcharges.dat"    # Point charges template
+  hsd_template: "input/dftb_in.hsd"            # DFTB+ HSD template
+
+# Output settings
+output:
+  directory: "output_online"          # Output directory
+  energy_file: "energies.dat"         # Energy output file
+  charge_file: "charges.dat"          # Charge output file
+  ci_file: "cdftbci.dat"              # CDFTB-CI results file
+  ci_sub_file: "cdftbci_sub.dat"      # CDFTB-CI detailed values file
+  
+  # Output mode:
+  #   "online_ci" - Use single work directory, compute CI on-the-fly (recommended)
+  #   "store_frames" - Store each frame in separate directory (legacy behavior)
+  mode: "online_ci"
+  work_directory: "work"              # Working directory name (for online_ci mode)
+
+# Frame selection
+frames:
+  start: 0                            # First frame to process (0-indexed)
+  n_frames: 10                        # Number of frames (null = all)
+  t0_fs: 0.0                          # Initial time (fs)
+  dt_fs: 4.0                          # Time step (fs) between frames
+
+# DFTB+ settings
+dftb:
+  library_path: "/home/takahashi/opt/dftb+/lib/libdftbplus.so"
+  num_threads: 4                      # Number of CPU threads (null = use system default)
+  timeout: 600                        # Timeout per calculation (seconds)
+
+# Fragment definitions for constrained DFT
+# Each fragment has:
+#   - name: identifier for the fragment
+#   - atom_range: DFTB+ style atom range (1-indexed), e.g., "1:36"
+#   - charge_sum_range: (optional) Python-style index range [start, end)
+#   - initial_charges: (optional) Path to charges.dat for first frame initial guess
+fragments:
+  - name: "fragment1"
+    atom_range: "1:36"
+    initial_charges: "input/charges_fragment1.dat"  # uncomment to use
+  - name: "fragment2"
+    atom_range: "37:72"
+    initial_charges: "input/charges_fragment2.dat"  # uncomment to use
+
+# CDFTB-CI settings
+cdftb_ci:
+  enabled: true                       # Enable/disable CDFTB-CI calculation
+  # Target Mulliken population for constraint (number of electrons on the constrained fragment)
+  # For pentacene cation: neutral pentacene has 102 electrons, cation has 101
+  N_A: 101
+  N_B: 101
+
+# SCF settings
+scf:
+  # Use charges from previous frame as initial guess for faster convergence
+  # Note: First frame always starts from scratch (InitialSpins)
+  use_previous_charges: true

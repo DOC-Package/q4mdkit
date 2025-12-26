@@ -761,6 +761,83 @@ def load_spin_polarized_calculation(
     return data
 
 
+def load_spin_polarized_calculation_for_ci(
+    dirpath: str | Path
+) -> dict:
+    """
+    Load data from a spin-polarized DFTB+ calculation for CDFTB-CI.
+    
+    This function loads only the data needed for CDFTB-CI calculations,
+    without requiring Hamiltonian matrices (hamsqr1.dat, hamsqr2.dat).
+    
+    Required files:
+    - oversqr.dat (AO overlap matrix)
+    - eigenvec.out (MO coefficients)
+    - band.out (eigenvalues and occupations)
+    - final_Vc.dat (constraint potential, optional)
+    
+    Parameters
+    ----------
+    dirpath : str or Path
+        Path to DFTB+ output directory.
+        
+    Returns
+    -------
+    data : dict
+        Dictionary containing:
+        - 'S': Overlap matrix
+        - 'C_alpha': α eigenvector matrix
+        - 'C_beta': β eigenvector matrix
+        - 'eig_alpha': α eigenvalues
+        - 'occ_alpha': α occupation numbers
+        - 'eig_beta': β eigenvalues
+        - 'occ_beta': β occupation numbers
+        - 'n_alpha': Number of occupied α orbitals
+        - 'n_beta': Number of occupied β orbitals
+        - 'n_orbitals': Number of AOs
+        - 'Vc': Constraint potential (if available)
+        - 'energy': Total energy (if available)
+    """
+    dirpath = Path(dirpath)
+    
+    data = {}
+    
+    # Read overlap
+    S, n_orbitals = read_overlap(dirpath)
+    data['S'] = S
+    data['n_orbitals'] = n_orbitals
+    
+    # Read eigenvectors
+    C_alpha, C_beta, _, _ = read_eigenvectors_from_dir_spin_polarized(dirpath)
+    data['C_alpha'] = C_alpha
+    data['C_beta'] = C_beta
+    
+    # Read eigenvalues and occupations
+    eig_alpha, occ_alpha, eig_beta, occ_beta = read_eigenvalues_from_dir_spin_polarized(dirpath)
+    data['eig_alpha'] = eig_alpha
+    data['occ_alpha'] = occ_alpha
+    data['eig_beta'] = eig_beta
+    data['occ_beta'] = occ_beta
+    
+    # Count occupied orbitals
+    data['n_alpha'] = np.sum(occ_alpha > 0.5).astype(int)
+    data['n_beta'] = np.sum(occ_beta > 0.5).astype(int)
+    
+    # Read constraint potential (optional)
+    try:
+        data['Vc'] = read_constraint_potential(dirpath)
+    except FileNotFoundError:
+        data['Vc'] = None
+    
+    # Read total energy (optional)
+    try:
+        data['energy'] = read_total_energy(dirpath)
+    except (FileNotFoundError, ValueError):
+        data['energy'] = None
+    
+    return data
+
+
 # =============================================================================
 # Main: Test the module
 # =============================================================================

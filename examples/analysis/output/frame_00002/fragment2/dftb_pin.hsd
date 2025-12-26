@@ -179,6 +179,7 @@ ParserOptions = {
 }
 Options = {
   WriteDetailedOut = Yes
+  WriteDetailedXml = Yes
   WriteAutotestTag = No
   WriteResultsTag = No
   RestartFrequency = 20
@@ -186,7 +187,6 @@ Options = {
   TimingVerbosity = 1
   WriteCharges = Yes
   WriteChargesAsText = Yes
-  WriteDetailedXml = Yes
   WriteHS = Yes
   ReadChargesAsText = Yes
   WriteRealHS = No
