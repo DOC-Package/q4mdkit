@@ -111,7 +111,7 @@ H     30.548333349778  36.346782233361  28.130056346949
    Exponent = 4.0
   }
   Scc = Yes
-  MaxSCCIterations = 300
+  MaxSCCIterations = 1500
   ThirdOrderFull = Yes
   ThirdOrder = No
   HubbardDerivs {
@@ -139,7 +139,7 @@ H     30.548333349778  36.346782233361  28.130056346949
       Optimiser {
         FIRE {}
       }
-      ConstrTolerance = 1e-3
+      ConstrTolerance = 1e-4
       MaxConstrIterations = 200
       ConvergentConstrOnly = Yes
     }
@@ -158,7 +158,7 @@ ParserOptions {
 }
 Options {
   WriteDetailedOut = Yes
-  WriteDetailedXml = Yes
+  WriteDetailedXml = No
   WriteAutotestTag = No
   WriteResultsTag = No
   RestartFrequency = 20

@@ -23,7 +23,6 @@ Default config file: cdftb_settings.yaml
 
 import argparse
 from pathlib import Path
-
 from qm4d4crystal.analysis.cdftbci import run_cdftbci_analysis
 
 

@@ -27,7 +27,7 @@ output:
 # Frame selection
 frames:
   start: 0                            # First frame to process (0-indexed)
-  n_frames: 10                        # Number of frames (null = all)
+  n_frames: null                        # Number of frames (null = all)
   t0_fs: 0.0                          # Initial time (fs)
   dt_fs: 4.0                          # Time step (fs) between frames
 

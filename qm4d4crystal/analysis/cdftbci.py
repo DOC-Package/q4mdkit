@@ -1002,6 +1002,10 @@ def setup_fragment_work_directory(
     # Set ReadInitialCharges if using previous frame's charges
     if read_initial_charges:
         data['Hamiltonian']['DFTB']['ReadInitialCharges'] = 'Yes'
+        # Need ReadChargesAsText to read text format charges.dat
+        if 'Options' not in data:
+            data['Options'] = {}
+        data['Options']['ReadChargesAsText'] = 'Yes'
         # Remove InitialSpins when using ReadInitialCharges (they conflict)
         if 'SpinPolarisation' in data['Hamiltonian']['DFTB']:
             spin_pol = data['Hamiltonian']['DFTB']['SpinPolarisation']

@@ -403,6 +403,7 @@ def run_dftb_calculation(qm_coords_bohr, frame_dir, write_hs, result_queue, dftb
             data = hsd.load(f)
         
         if write_hs:
+            # WriteHS calculation: always read initial charges (from SCC calculation)
             data['Hamiltonian']['DFTB']['ReadInitialCharges'] = 'Yes'
             data['Options']['WriteHS'] = 'Yes'
             data['Options']['ReadChargesAsText'] = 'Yes'
@@ -416,11 +417,9 @@ def run_dftb_calculation(qm_coords_bohr, frame_dir, write_hs, result_queue, dftb
                     del spin_pol['Colinear']['InitialSpins']
         else:
             # SCC calculation: output charges as text for subsequent WriteHS calculation
-            data['Hamiltonian']['DFTB']['ReadInitialCharges'] = 'No'
+            # Note: ReadInitialCharges and ReadChargesAsText are set in setup_fragment_directory
             data['Options']['WriteHS'] = 'No'
             data['Options']['WriteChargesAsText'] = 'Yes'  # Output charges.dat for WriteHS
-            if 'ReadChargesAsText' in data['Options']:
-                del data['Options']['ReadChargesAsText']
         
         with open("dftb_in.hsd", 'w') as f:
             hsd.dump(data, f)
