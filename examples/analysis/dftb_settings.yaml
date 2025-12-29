@@ -4,7 +4,7 @@
 
 # Input paths (relative to this config file directory)
 input:
-  trajectory: "traj/test.dcd"         # Trajectory file (DCD format)
+  trajectory: "traj/test2.dcd"         # Trajectory file (DCD format)
   topology: "traj/pentacene.pdb"      # Topology file (GRO/PDB/etc.)
   qm_atoms: "traj/qmatoms"            # QM atom indices file (0-indexed)
   pccharges_template: "input/PCcharges.dat"    # Point charges template
@@ -12,7 +12,7 @@ input:
 
 # Output settings
 output:
-  directory: "output_dftb"            # Output directory
+  directory: "output_dftb2"            # Output directory
   energy_file: "energies.dat"         # Energy output file
   work_directory: "work"              # Working directory name
 
@@ -20,7 +20,7 @@ output:
 frames:
   start: 0                            # First frame to process (0-indexed)
   n_frames: null                        # Number of frames (null = all)
-  t0_fs: 0.0                          # Initial time (fs)
+  t0_fs: 100.0                          # Initial time (fs)
   dt_fs: 4.0                          # Time step (fs) between frames
 
 # DFTB+ settings
@@ -32,4 +32,4 @@ dftb:
 # SCC settings
 scc:
   # Use charges from previous frame as initial guess for faster convergence
-  use_previous_charges: true
+  use_previous_charges: false

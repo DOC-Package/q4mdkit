@@ -1,13 +1,14 @@
 # Sample QM Energy File Settings Configuration
 
 # Path (relative to this config file directory)
-energy_file: "qm_energy.dat"         # Input QM energy file
+energy_file: "qm_energy2.dat"         # Input QM energy file
 output_file: null                    # Output file (null = <input>_sampled.dat)
 
 # Time interval settings
-energy_interval: 1                   # Energy output interval in fs
-sample_interval: 4                   # DCD trajectory sample interval in fs
+dt_fs: 1                             # Energy output interval in fs
+dt_sample_fs: 4                      # DCD trajectory sample interval in fs
+t0_fs: 96.0                           # Initial time in fs for first output frame
 
 # Frame range settings
-start_frame: 1                       # Starting frame index (0-indexed)
+start_frame: 0                       # Starting frame index (0-indexed)
 n_frames: null                       # Number of frames to process (null = all)

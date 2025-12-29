@@ -4,7 +4,7 @@ Sample qm_energy.dat file to extract energy lines corresponding to trajectory fr
 This module extracts energy lines that match trajectory frame sampling intervals.
 
 Usage:
-    python sample_energy.py qm_energy.dat --energy-interval 1 --sample-interval 20
+    python sample_energy.py qm_energy.dat --dt-fs 1 --dt-sample-fs 20
     python sample_energy.py qm_energy.dat --start 100 --n-frames 1000
 """
 
@@ -16,10 +16,11 @@ from typing import Optional
 def sample_energy_file(
     energy_path: str,
     output_path: Optional[str] = None,
-    energy_interval: float = 1.0,
-    sample_interval: float = 1.0,
+    dt_fs: float = 1.0,
+    dt_sample_fs: float = 1.0,
     start_frame: int = 0,
     n_frames: Optional[int] = None,
+    t0_fs: float = 0.0,
 ) -> str:
     """
     Sample qm_energy.dat file, extracting lines that correspond to trajectory frames.
@@ -30,15 +31,17 @@ def sample_energy_file(
         Path to qm_energy.dat file.
     output_path : str, optional
         Output file path. If None, creates '<input>_sampled.dat'.
-    energy_interval : float
+    dt_fs : float
         Time interval between energy output steps in qm_energy.dat (in fs).
-    sample_interval : float
+    dt_sample_fs : float
         Time interval between DCD trajectory frames (in fs).
     start_frame : int
         First trajectory frame to include (0-indexed).
     n_frames : int, optional
         Total number of trajectory frames to process.
         If None, process all frames from start_frame to end.
+    t0_fs : float
+        Initial time in fs for first output frame (default: 0.0).
     
     Returns
     -------
@@ -48,7 +51,7 @@ def sample_energy_file(
     Notes
     -----
     For trajectory frame i, the corresponding energy line index is:
-        energy_idx = i * (sample_interval / energy_interval)
+        energy_idx = i * (dt_sample_fs / dt_fs)
     """
     energy_path = Path(energy_path)
     
@@ -60,8 +63,8 @@ def sample_energy_file(
     output_path.parent.mkdir(parents=True, exist_ok=True)
     
     print(f"Sampling energy file: {energy_path}")
-    print(f"  Energy output interval: {energy_interval} fs")
-    print(f"  Sample (DCD) interval: {sample_interval} fs")
+    print(f"  Energy output interval: {dt_fs} fs")
+    print(f"  Sample (DCD) interval: {dt_sample_fs} fs")
     print(f"  Start frame: {start_frame}")
     
     # Read energy file
@@ -81,10 +84,10 @@ def sample_energy_file(
     print(f"  Total energy steps in file: {n_energy_steps}")
     
     # Calculate step ratio: how many energy lines per trajectory frame
-    step_ratio = sample_interval / energy_interval
+    step_ratio = dt_sample_fs / dt_fs
     if step_ratio != int(step_ratio):
-        print(f"  Warning: sample_interval ({sample_interval}) is not a multiple of "
-              f"energy_interval ({energy_interval}). Using rounded indices.")
+        raise ValueError(f"dt_sample_fs ({dt_sample_fs}) must be a multiple of "
+                        f"dt_fs ({dt_fs}). Got ratio: {step_ratio}")
     step_ratio = int(step_ratio)
     
     print(f"  Step ratio: {step_ratio} (energy lines per trajectory frame)")
@@ -123,11 +126,15 @@ def sample_energy_file(
     # Write output file
     with open(output_path, 'w') as f:
         # Write header
-        for h in header_lines:
-            f.write(h)
-        # Write sampled data lines
-        for idx in sampled_indices:
-            f.write(data_lines[idx])
+        f.write("# call_index  time[fs]  energy[a.u.]\n")
+        # Write sampled data lines with call_index, time and total energy
+        for i, idx in enumerate(sampled_indices):
+            time_fs = t0_fs + i * dt_sample_fs
+            # Extract call_index and total energy (columns: index, electronic, repulsive, total)
+            parts = data_lines[idx].strip().split()
+            call_index = parts[0]
+            total_energy = parts[3]  # Total energy is the 4th column
+            f.write(f"{call_index:>8}  {time_fs:12.3f}  {total_energy}\n")
     
     print(f"  -> Saved: {output_path}")
     return str(output_path)
@@ -147,13 +154,13 @@ def main():
         help="Output file path (default: <input>_sampled.dat)"
     )
     parser.add_argument(
-        "--energy-interval",
+        "--dt-fs",
         type=float,
         default=1.0,
         help="Time interval between energy output steps in fs (default: 1)"
     )
     parser.add_argument(
-        "--sample-interval",
+        "--dt-sample-fs",
         type=float,
         default=1.0,
         help="Time interval between DCD trajectory frames in fs (default: 1)"
@@ -170,16 +177,23 @@ def main():
         default=None,
         help="Number of frames to process (default: all from start)"
     )
+    parser.add_argument(
+        "--t0",
+        type=float,
+        default=0.0,
+        help="Initial time in fs for first output frame (default: 0.0)"
+    )
     
     args = parser.parse_args()
     
     sample_energy_file(
         args.energy_file,
         output_path=args.output,
-        energy_interval=args.energy_interval,
-        sample_interval=args.sample_interval,
+        dt_fs=args.dt_fs,
+        dt_sample_fs=args.dt_sample_fs,
         start_frame=args.start,
         n_frames=args.n_frames,
+        t0_fs=args.t0,
     )
 
 

@@ -4,7 +4,7 @@
 
 # Input paths (relative to this config file directory)
 input:
-  trajectory: "traj/test.dcd"         # Trajectory file (DCD format)
+  trajectory: "traj/traj_part01.dcd"         # Trajectory file (DCD format)
   topology: "traj/pentacene.pdb"      # Topology file (GRO/PDB/etc.)
   qm_atoms: "traj/qmatoms"            # QM atom indices file (0-indexed)
   pccharges_template: "input/PCcharges.dat"    # Point charges template
@@ -12,7 +12,7 @@ input:
 
 # Output settings
 output:
-  directory: "output"          # Output directory
+  directory: "output_test"          # Output directory
   energy_file: "energies.dat"         # Energy output file
   charge_file: "charges.dat"          # Charge output file
   ci_file: "cdftbci.dat"              # CDFTB-CI results file
@@ -34,7 +34,7 @@ frames:
 # DFTB+ settings
 dftb:
   library_path: "/home/takahashi/opt/dftb+/lib/libdftbplus.so"
-  num_threads: 4                      # Number of CPU threads (null = use system default)
+  num_threads: 8                      # Number of CPU threads (null = use system default)
   timeout: 600                        # Timeout per calculation (seconds)
 
 # Fragment definitions for constrained DFT
@@ -46,10 +46,10 @@ dftb:
 fragments:
   - name: "fragment1"
     atom_range: "1:36"
-    #initial_charges: "input/charges_fragment1.dat"  # uncomment to use
+    #initial_charges: "input/charges1.dat"  # uncomment to use
   - name: "fragment2"
     atom_range: "37:72"
-    #initial_charges: "input/charges_fragment2.dat"  # uncomment to use
+    #initial_charges: "input/charges2.dat"  # uncomment to use
 
 # CDFTB-CI settings
 cdftb_ci:

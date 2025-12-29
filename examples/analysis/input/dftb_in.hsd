@@ -111,7 +111,7 @@ H     30.548333349778  36.346782233361  28.130056346949
    Exponent = 4.0
   }
   Scc = Yes
-  MaxSCCIterations = 1500
+  MaxSCCIterations = 3000
   ThirdOrderFull = Yes
   ThirdOrder = No
   HubbardDerivs {
@@ -139,7 +139,7 @@ H     30.548333349778  36.346782233361  28.130056346949
       Optimiser {
         FIRE {}
       }
-      ConstrTolerance = 1e-4
+      ConstrTolerance = 5e-4
       MaxConstrIterations = 200
       ConvergentConstrOnly = Yes
     }

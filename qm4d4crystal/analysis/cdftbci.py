@@ -809,6 +809,9 @@ class CDFTBCIConfig(CDFTBConfig):
     # Spin output file
     spin_output_file: Optional[Path] = None
     
+    # Retry log file
+    retry_log_file: Optional[Path] = None
+    
     # Use previous frame's charges as initial guess
     use_previous_charges: bool = False
 
@@ -902,6 +905,9 @@ def load_cdftbci_config(config_path: Path) -> CDFTBCIConfig:
     # Spin output file
     spin_output_file = output_dir / output_cfg.get('spin_file', 'spin.dat')
     
+    # Retry log file
+    retry_log_file = output_dir / output_cfg.get('retry_log_file', 'retry_log.dat')
+    
     return CDFTBCIConfig(
         traj_path=traj_path,
         topology_path=topology_path,
@@ -927,6 +933,7 @@ def load_cdftbci_config(config_path: Path) -> CDFTBCIConfig:
         ci_output_file=ci_output_file,
         ci_sub_file=ci_sub_file,
         spin_output_file=spin_output_file,
+        retry_log_file=retry_log_file,
         use_previous_charges=use_previous_charges,
     )
 
@@ -963,9 +970,25 @@ def setup_fragment_work_directory(
     constrained_atoms: str,
     hsd_template: Path,
     read_initial_charges: bool = False,
+    disable_constraint: bool = False,
 ) -> Path:
     """
     Set up fragment subdirectory within work directory.
+    
+    Parameters
+    ----------
+    work_dir : Path
+        Parent working directory.
+    fragment_name : str
+        Name of the fragment (used for subdirectory name).
+    constrained_atoms : str
+        DFTB+ style atom range for constraint, e.g., "1:36".
+    hsd_template : Path
+        Path to HSD template file.
+    read_initial_charges : bool
+        Whether to read initial charges from charges.dat.
+    disable_constraint : bool
+        If True, disable the electronic constraint (for fallback calculations).
     """
     frag_dir = work_dir / fragment_name
     frag_dir.mkdir(parents=True, exist_ok=True)
@@ -981,16 +1004,21 @@ def setup_fragment_work_directory(
     # Update PCcharges path (use parent directory's file)
     data['Hamiltonian']['DFTB']['ElectricField']['PointCharges']['CoordsAndCharges']['DirectRead']['File'] = '../PCcharges.dat'
     
-    # Modify ElectronicConstraints to constrain specific fragment
-    if 'ElectronicConstraints' in data['Hamiltonian']['DFTB']:
-        constraints = data['Hamiltonian']['DFTB']['ElectronicConstraints']['Constraints']
-        if 'MullikenPopulation' in constraints:
-            mulliken = constraints['MullikenPopulation']
-            if isinstance(mulliken, list):
-                for constraint in mulliken:
-                    constraint['Atoms'] = constrained_atoms
-            else:
-                mulliken['Atoms'] = constrained_atoms
+    # Disable constraint if requested (for fallback calculations)
+    if disable_constraint:
+        if 'ElectronicConstraints' in data['Hamiltonian']['DFTB']:
+            del data['Hamiltonian']['DFTB']['ElectronicConstraints']
+    else:
+        # Modify ElectronicConstraints to constrain specific fragment
+        if 'ElectronicConstraints' in data['Hamiltonian']['DFTB']:
+            constraints = data['Hamiltonian']['DFTB']['ElectronicConstraints']['Constraints']
+            if 'MullikenPopulation' in constraints:
+                mulliken = constraints['MullikenPopulation']
+                if isinstance(mulliken, list):
+                    for constraint in mulliken:
+                        constraint['Atoms'] = constrained_atoms
+                else:
+                    mulliken['Atoms'] = constrained_atoms
     
     # Modify InitialSpins.Atoms to guide spin localization
     if 'SpinPolarisation' in data['Hamiltonian']['DFTB']:
@@ -1149,6 +1177,101 @@ def compute_spin_for_fragment(
         return None, error_msg
 
 
+def run_cdftb_with_retry(
+    work_dir: Path,
+    frag: 'FragmentConfig',
+    qm_coords_bohr: np.ndarray,
+    hsd_template: Path,
+    dftb_library_path: str,
+    num_threads: Optional[int],
+    timeout: int,
+    use_initial_charges: bool,
+    ci_enabled: bool,
+) -> Tuple[float, List[float], bool, str]:
+    """
+    Run CDFTB calculation with automatic retry on convergence failure.
+    
+    Retry strategy:
+    1. First attempt: Run with specified initial charges setting
+    2. If failed: Run DFTB to generate initial charges, then retry CDFTB with those charges
+    3. If still failed: Run without constraint and without reading initial charges
+    
+    Parameters
+    ----------
+    work_dir : Path
+        Working directory.
+    frag : FragmentConfig
+        Fragment configuration.
+    qm_coords_bohr : np.ndarray
+        QM coordinates in Bohr.
+    hsd_template : Path
+        Path to HSD template file.
+    dftb_library_path : str
+        Path to DFTB+ library.
+    num_threads : int or None
+        Number of OpenMP threads.
+    timeout : int
+        Timeout in seconds.
+    use_initial_charges : bool
+        Whether to read initial charges for first attempt.
+    ci_enabled : bool
+        Whether CDFTB-CI is enabled (determines if WriteHS is needed).
+        
+    Returns
+    -------
+    energy : float
+        Energy (nan if all attempts failed).
+    all_frag_charges : list of float
+        Mulliken charges for all fragments (nan if failed).
+    success : bool
+        Whether calculation succeeded.
+    retry_info : str
+        Information about retry attempts ("", "no_init_charges", "all_failed:...").
+    """
+    frag_dir = work_dir / frag.name
+    retry_info = ""
+    
+    # First attempt: normal CDFTB
+    frag_dir = setup_fragment_work_directory(
+        work_dir, frag.name, frag.atom_range, hsd_template,
+        read_initial_charges=use_initial_charges
+    )
+    
+    energy, mcharge, error = run_dftb_in_subprocess(
+        qm_coords_bohr, frag_dir, write_hs=False,
+        dftb_library_path=dftb_library_path,
+        num_threads=num_threads,
+        timeout=timeout
+    )
+    
+    if error is None:
+        # Success on first attempt
+        return energy, mcharge, True, retry_info
+    
+    # Second attempt: Run with constraint but without reading initial charges
+    print(f"    [Retry] First attempt failed ({error[:50]}...), trying without initial charges")
+    
+    frag_dir = setup_fragment_work_directory(
+        work_dir, frag.name, frag.atom_range, hsd_template,
+        read_initial_charges=False,
+        disable_constraint=False
+    )
+    
+    energy, mcharge, error = run_dftb_in_subprocess(
+        qm_coords_bohr, frag_dir, write_hs=False,
+        dftb_library_path=dftb_library_path,
+        num_threads=num_threads,
+        timeout=timeout
+    )
+    
+    if error is None:
+        retry_info = "no_init_charges"
+        return energy, mcharge, True, retry_info
+    
+    # All attempts failed
+    return float("nan"), None, False, f"all_failed:{error}"
+
+
 def run_cdftbci_analysis(config_path: Path) -> None:
     """
     Run CDFTB-CI analysis with online calculation.
@@ -1237,6 +1360,16 @@ def run_cdftbci_analysis(config_path: Path) -> None:
     ci_file = None
     ci_sub_file = None
     spin_file = None
+    retry_log_file = None
+    
+    # Open retry log file
+    retry_log_file = open(config.retry_log_file, "w")
+    retry_log_file.write("# Retry Log for CDFTB Calculations\n")
+    retry_log_file.write("# Retry info: '-' = success on first attempt,\n")
+    retry_log_file.write("#             'no_init_charges' = succeeded without initial charges, 'all_failed:...' = all attempts failed\n")
+    frag_names = [f.name for f in config.fragments]
+    retry_header = "# Frame  Time(fs)  " + "  ".join([f"retry_{name}" for name in frag_names]) + "\n"
+    retry_log_file.write(retry_header)
     
     if config.ci_enabled:
         ci_file = open(config.ci_output_file, "w")
@@ -1297,6 +1430,7 @@ def run_cdftbci_analysis(config_path: Path) -> None:
             energies = []
             charges = []
             cdftb_success = True
+            retry_infos = []
             
             for frag in config.fragments:
                 frag_dir = work_dir / frag.name
@@ -1318,22 +1452,16 @@ def run_cdftbci_analysis(config_path: Path) -> None:
                         if charges_file.exists():
                             use_initial_charges = True
                 
-                # Set up fragment directory
-                frag_dir = setup_fragment_work_directory(
-                    work_dir, frag.name, frag.atom_range, config.hsd_template,
-                    read_initial_charges=use_initial_charges
+                # Run CDFTB calculation with automatic retry
+                energy, mcharge, success, retry_info = run_cdftb_with_retry(
+                    work_dir, frag, qm_coords_bohr, config.hsd_template,
+                    config.dftb_library_path, config.num_threads, config.timeout,
+                    use_initial_charges, config.ci_enabled
                 )
+                retry_infos.append(retry_info)
                 
-                # Run DFTB+ calculation
-                energy, mcharge, error = run_dftb_in_subprocess(
-                    qm_coords_bohr, frag_dir, write_hs=False,
-                    dftb_library_path=config.dftb_library_path,
-                    num_threads=config.num_threads,
-                    timeout=config.timeout
-                )
-                
-                if error:
-                    print(f"  {frag.name}: ERROR - {error}")
+                if not success:
+                    print(f"  {frag.name}: ERROR - {retry_info}")
                     frag_charge = float("nan")
                     energy = float("nan")
                     all_frag_charges = [float("nan")] * len(config.fragments)
@@ -1346,11 +1474,13 @@ def run_cdftbci_analysis(config_path: Path) -> None:
                         s, e = f.charge_sum_range
                         all_frag_charges.append(float(np.sum(mcharge[s:e])))
                     charges_str = ", ".join([f"Q_{f.name}={q:+.6f}" for f, q in zip(config.fragments, all_frag_charges)])
-                    print(f"  {frag.name}: E = {energy:.10f} a.u., {charges_str}")
+                    retry_str = f" [{retry_info}]" if retry_info else ""
+                    print(f"  {frag.name}: E = {energy:.10f} a.u., {charges_str}{retry_str}")
                     
                     # Run WriteHS calculation to output oversqr.dat for CDFTB-CI
                     # Note: DFTB+ crashes after WriteHS output, which is expected behavior
                     if config.ci_enabled:
+                        frag_dir = work_dir / frag.name
                         _, _, error_hs = run_dftb_in_subprocess(
                             qm_coords_bohr, frag_dir, write_hs=True,
                             dftb_library_path=config.dftb_library_path,
@@ -1375,6 +1505,14 @@ def run_cdftbci_analysis(config_path: Path) -> None:
                     charge_parts.append(f"{q:+12.6f}")
             charge_file.write("  ".join(charge_parts) + "\n")
             charge_file.flush()
+            
+            # Save retry info
+            retry_parts = [f"{frame_id:5d}", f"{time_val:12.3f}"]
+            for info in retry_infos:
+                # Use '-' for empty string (first attempt success)
+                retry_parts.append(f"{info if info else '-':>20s}")
+            retry_log_file.write("  ".join(retry_parts) + "\n")
+            retry_log_file.flush()
             
             # Compute CDFTB-CI if enabled and CDFTB was successful
             if config.ci_enabled and cdftb_success and len(config.fragments) == 2:
@@ -1483,11 +1621,14 @@ def run_cdftbci_analysis(config_path: Path) -> None:
             ci_sub_file.close()
         if spin_file:
             spin_file.close()
+        if retry_log_file:
+            retry_log_file.close()
         
         print("=" * 70)
         print(f"Energies saved to {config.energy_file}")
         print(f"Charges saved to {config.charge_file}")
         print(f"Spin populations saved to {config.spin_output_file}")
+        print(f"Retry log saved to {config.retry_log_file}")
         if config.ci_enabled:
             print(f"CDFTB-CI results saved to {config.ci_output_file}")
             print(f"CDFTB-CI sub values saved to {config.ci_sub_file}")
