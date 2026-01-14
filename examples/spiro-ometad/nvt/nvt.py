@@ -1,8 +1,8 @@
 from ash import *
 import os
 import sys
-from qm4d4crystal.qmmm.qmmm_config import get_config
-from qm4d4crystal.qmmm.md_config import get_md_config
+from q4mdkit.qmmm.qmmm_config import get_config
+from q4mdkit.qmmm.md_config import get_md_config
 import mdtraj as md
 
 # Load configurations from parent directory

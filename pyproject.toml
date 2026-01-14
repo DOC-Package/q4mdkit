@@ -3,11 +3,11 @@ requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "qm4d4crystal"
+name = "q4mdkit"
 version = "0.1.0"
 description = "QM/MM tools for molecular crystals"
 requires-python = ">=3.8"
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["qm4d4crystal*"]
+include = ["q4md4crystal*", "q4mdkit*"]

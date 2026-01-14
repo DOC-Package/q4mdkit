@@ -1,9 +1,9 @@
 # VMD visualization script - All QM-like view
 # Shows entire system with CPK representation (QM-style)
-# Usage: vmd -e /home/takahashi/python/qm4d4crystal/examples/pentacene775-single/input/visualize_vmd_allqm.tcl
+# Usage: vmd -e /home/takahashi/python/q4mdkit/examples/pentacene775-single/input/visualize_vmd_allqm.tcl
 
 # Load structure
-mol new /home/takahashi/python/qm4d4crystal/examples/pentacene775-single/input/pentacene_qmmm.pdb type pdb waitfor all
+mol new /home/takahashi/python/q4mdkit/examples/pentacene775-single/input/pentacene_qmmm.pdb type pdb waitfor all
 
 # Delete default representation
 mol delrep 0 top
@@ -31,7 +31,7 @@ if {[$qm_sel num] > 0} {
 # ============================================================
 # Viewpoint save/restore functions
 # ============================================================
-proc save_viewpoint {{filename "/home/takahashi/python/qm4d4crystal/examples/pentacene775-single/input/viewpoint.tcl"}} {
+proc save_viewpoint {{filename "/home/takahashi/python/q4mdkit/examples/pentacene775-single/input/viewpoint.tcl"}} {
     set fp [open $filename w]
     puts $fp "# VMD viewpoint settings - auto-generated"
     puts $fp "molinfo top set {rotate_matrix} {[molinfo top get rotate_matrix]}"
@@ -42,7 +42,7 @@ proc save_viewpoint {{filename "/home/takahashi/python/qm4d4crystal/examples/pen
     puts "Viewpoint saved to: $filename"
 }
 
-proc load_viewpoint {{filename "/home/takahashi/python/qm4d4crystal/examples/pentacene775-single/input/viewpoint.tcl"}} {
+proc load_viewpoint {{filename "/home/takahashi/python/q4mdkit/examples/pentacene775-single/input/viewpoint.tcl"}} {
     if {[file exists $filename]} {
         source $filename
         puts "Viewpoint loaded from: $filename"
@@ -70,14 +70,14 @@ proc save_tachyon {{filename "snapshot.tga"}} {
 }
 
 # Auto-load viewpoint if exists
-if {[file exists "/home/takahashi/python/qm4d4crystal/examples/pentacene775-single/input/viewpoint.tcl"]} {
+if {[file exists "/home/takahashi/python/q4mdkit/examples/pentacene775-single/input/viewpoint.tcl"]} {
     load_viewpoint
-    puts "Auto-loaded viewpoint from /home/takahashi/python/qm4d4crystal/examples/pentacene775-single/input/viewpoint.tcl"
+    puts "Auto-loaded viewpoint from /home/takahashi/python/q4mdkit/examples/pentacene775-single/input/viewpoint.tcl"
 }
 
 puts "All atoms shown with CPK representation (QM-like style)"
 puts "Colored by element name"
 puts ""
 puts "Viewpoint commands:"
-puts "  save_viewpoint           - Save current view to /home/takahashi/python/qm4d4crystal/examples/pentacene775-single/input/viewpoint.tcl"
-puts "  load_viewpoint           - Load view from /home/takahashi/python/qm4d4crystal/examples/pentacene775-single/input/viewpoint.tcl"
+puts "  save_viewpoint           - Save current view to /home/takahashi/python/q4mdkit/examples/pentacene775-single/input/viewpoint.tcl"
+puts "  load_viewpoint           - Load view from /home/takahashi/python/q4mdkit/examples/pentacene775-single/input/viewpoint.tcl"

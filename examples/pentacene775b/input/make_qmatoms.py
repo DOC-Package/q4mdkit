@@ -4,7 +4,7 @@ Select QM atoms from pentacene 3x3x3 supercell PDB file
 """
 import sys
 from pathlib import Path
-from qm4d4crystal.prep.select_qmatoms import select_qmatoms
+from q4mdkit.prep.select_qmatoms import select_qmatoms
 
 input_dir = Path(__file__).parent
 result = select_qmatoms(

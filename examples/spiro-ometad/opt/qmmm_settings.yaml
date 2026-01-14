@@ -4,10 +4,10 @@
 # File paths
 paths:
   sk_dir: "/home/takahashi/qmmm/sk/3ob"
-  amber_prmtop: "/home/takahashi/python/qm4d4crystal/examples/spiro-ometad/input/spiro-ometad.prmtop"
-  pdbfile: "/home/takahashi/python/qm4d4crystal/examples/spiro-ometad/input/spiro-ometad.pdb"
-  qatoms: "/home/takahashi/python/qm4d4crystal/examples/spiro-ometad/input/qmatoms"
-  boxfile: "/home/takahashi/python/qm4d4crystal/examples/spiro-ometad/input/spiro-ometad.box"
+  amber_prmtop: "/home/takahashi/python/q4mdkit/examples/spiro-ometad/input/spiro-ometad.prmtop"
+  pdbfile: "/home/takahashi/python/q4mdkit/examples/spiro-ometad/input/spiro-ometad.pdb"
+  qatoms: "/home/takahashi/python/q4mdkit/examples/spiro-ometad/input/qmatoms"
+  boxfile: "/home/takahashi/python/q4mdkit/examples/spiro-ometad/input/spiro-ometad.box"
 
 # Parallel settings
 parallel:

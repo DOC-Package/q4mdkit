@@ -9,7 +9,7 @@ Available functions:
 """
 import sys
 from pathlib import Path
-from qm4d4crystal.prep.cif2pdb import cif_to_pdb_wlhash  # WLハッシュ版（高速・正確）
+from q4mdkit.prep.cif2pdb import cif_to_pdb_wlhash  # WLハッシュ版（高速・正確）
 
 input_dir = Path(__file__).parent
 result = cif_to_pdb_wlhash(

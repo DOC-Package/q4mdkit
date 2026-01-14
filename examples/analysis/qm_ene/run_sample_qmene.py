@@ -12,7 +12,7 @@ import argparse
 import sys
 from pathlib import Path
 import yaml
-from qm4d4crystal.analysis.sample_energy import sample_energy_file
+from q4mdkit.analysis.sample_energy import sample_energy_file
 
 def main():
     parser = argparse.ArgumentParser(

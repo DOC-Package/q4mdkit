@@ -1,4 +1,4 @@
-# qm4d4crystal
+# q4mdkit
 
 QM/MM MD simulations of molecular crystals using ASH + OpenMM + DFTB+.
 

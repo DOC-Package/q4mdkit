@@ -13,8 +13,8 @@ import sys
 from pathlib import Path
 import yaml
 
-from qm4d4crystal.analysis.split_traj import split_trajectory
-from qm4d4crystal.analysis.split_energy import split_energy_file
+from q4mdkit.analysis.split_traj import split_trajectory
+from q4mdkit.analysis.split_energy import split_energy_file
 
 
 def main():

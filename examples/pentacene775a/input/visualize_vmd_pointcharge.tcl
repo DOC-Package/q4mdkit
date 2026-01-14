@@ -1,10 +1,10 @@
 # VMD visualization script - QM + MM point charges
 # QM region: CPK representation
 # MM region: Small spheres (point charge representation)
-# Usage: vmd -e /home/takahashi/python/qm4d4crystal/examples/pentacene775/input/visualize_vmd_pointcharge.tcl
+# Usage: vmd -e /home/takahashi/python/q4mdkit/examples/pentacene775/input/visualize_vmd_pointcharge.tcl
 
 # Load structure
-mol new /home/takahashi/python/qm4d4crystal/examples/pentacene775/input/pentacene_qmmm.pdb type pdb waitfor all
+mol new /home/takahashi/python/q4mdkit/examples/pentacene775/input/pentacene_qmmm.pdb type pdb waitfor all
 
 # Delete default representation
 mol delrep 0 top

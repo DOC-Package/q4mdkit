@@ -4,7 +4,7 @@ This script selects only one molecule - the one closest to the center.
 """
 import sys
 from pathlib import Path
-from qm4d4crystal.prep.select_qmatoms import select_central_molecule
+from q4mdkit.prep.select_qmatoms import select_central_molecule
 
 input_dir = Path(__file__).parent
 result = select_central_molecule(

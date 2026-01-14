@@ -1,7 +1,7 @@
 from ash import *
 import os
 import sys
-from qm4d4crystal.qmmm.qmmm_config import get_config
+from q4mdkit.qmmm.qmmm_config import get_config
 
 # Load QM/MM configuration
 qmmm_config = get_config("qmmm_settings.yaml")

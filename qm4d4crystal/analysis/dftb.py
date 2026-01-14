@@ -5,7 +5,7 @@ This module runs closed-shell, non-constrained DFTB calculations
 for each frame in a trajectory file. It outputs energies.
 
 Usage:
-    from qm4d4crystal.analysis.dftb import run_dftb_analysis
+    from q4mdkit.analysis.dftb import run_dftb_analysis
     run_dftb_analysis("dftb_settings.yaml")
 """
 

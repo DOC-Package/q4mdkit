@@ -4,7 +4,7 @@ Generate 3x3x3 supercell PDB and mol2 template from pentacene CIF for GAFF2/AMBE
 """
 import sys
 from pathlib import Path
-from qm4d4crystal.prep.cif2pdb import cif_to_pdb
+from q4mdkit.prep.cif2pdb import cif_to_pdb
 
 input_dir = Path(__file__).parent
 result = cif_to_pdb(

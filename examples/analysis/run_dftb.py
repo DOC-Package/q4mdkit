@@ -9,7 +9,7 @@ Usage:
 
 import sys
 from pathlib import Path
-from qm4d4crystal.analysis.dftb import run_dftb_analysis
+from q4mdkit.analysis.dftb import run_dftb_analysis
 
 def main():
     # Default config file
