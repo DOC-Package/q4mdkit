@@ -71,4 +71,4 @@ htmlcov/
 *.mdf   
 
 # backup files
-repo-backup.bundle
+q4mdkit.compat.bak/

@@ -6,7 +6,7 @@ ElectricField = {
   PointCharges = { 
     GaussianBlurWidth [Angstrom] = 0.0
     CoordsAndCharges [Angstrom] = DirectRead { 
-    Records = 1872
+    Records = 17568
     File = 'PCcharges.dat'
     }
   }
@@ -29,8 +29,8 @@ ElectricField = {
     H-H = '/home/takahashi/qmmm/sk/3ob/H-H.skf'
   }
   MaxAngularMomentum {
-    C = "p"
     H = "s"
+    C = "p"
   }
 }
 Options { WriteDetailedOut = Yes }

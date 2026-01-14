@@ -1,6 +1,6 @@
-from ash import *
 import os
 import sys
+from ash import Fragment
 from q4mdkit.qmmm.qmmm_config import get_config
 from q4mdkit.qmmm.md_config import get_md_config
 import mdtraj as md

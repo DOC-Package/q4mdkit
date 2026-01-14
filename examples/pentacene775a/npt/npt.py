@@ -1,9 +1,8 @@
-from ash import *
 import os
 import sys
-sys.path.insert(0, os.path.abspath('../../../src'))
-from qmmm.qmmm_config import get_config
-from qmmm.md_config import get_md_config
+from ash import Fragment
+from q4mdkit.qmmm.qmmm_config import get_config
+from q4mdkit.qmmm.md_config import get_md_config
 import mdtraj as md
 
 # Load configurations from parent directory

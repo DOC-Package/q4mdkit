@@ -3,10 +3,10 @@
 # File paths
 paths:
   sk_dir: "/home/takahashi/qmmm/sk/3ob"
-  amber_prmtop: "/workspace/q4mdkit/examples/pentacene775/input/pentacene.prmtop"
-  pdbfile: "/workspace/q4mdkit/examples/pentacene775/input/pentacene.pdb"
-  qatoms: "/workspace/q4mdkit/examples/pentacene775/input/qmatoms"
-  boxfile: "/workspace/q4mdkit/examples/pentacene775/input/pentacene.box"
+  amber_prmtop: "/home/takahashi/python/q4mdkit/examples/pentacene775a/input/pentacene.prmtop"
+  pdbfile: "/home/takahashi/python/q4mdkit/examples/pentacene775a/input/pentacene.pdb"
+  qatoms: "/home/takahashi/python/q4mdkit/examples/pentacene775a/input/qmatoms"
+  boxfile: "/home/takahashi/python/q4mdkit/examples/pentacene775a/input/pentacene.box"
 
 # Parallel settings
 parallel:

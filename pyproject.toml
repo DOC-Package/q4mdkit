@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "q4mdkit"
 version = "0.1.0"
-description = "QM/MM tools for molecular crystals"
+description = "QM/MM-MD toolkits"
 requires-python = ">=3.8"
 
 [tool.setuptools.packages.find]
