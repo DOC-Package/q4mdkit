@@ -1,13 +1,10 @@
+# Post-processing and QM analysis module
 """
-Compatibility subpackage for `qm4d4crystal.analysis` under `q4mdkit.analysis`.
+from .cdftbci import run_cdftbci_analysis
+from .dftb import run_dftb_analysis
 
-Re-exports the original `qm4d4crystal.analysis` symbols.
+__all__ = [
+    'run_cdftbci_analysis',
+    'run_dftb_analysis',
+]
 """
-
-from importlib import import_module
-
-_orig_pkg = import_module('qm4d4crystal.analysis')
-
-__all__ = [name for name in dir(_orig_pkg) if not name.startswith('_')]
-for _name in __all__:
-    globals()[_name] = getattr(_orig_pkg, _name)
