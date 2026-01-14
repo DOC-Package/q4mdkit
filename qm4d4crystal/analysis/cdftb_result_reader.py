@@ -27,6 +27,7 @@ File format for spin-polarized eigenvec.out:
 import numpy as np
 from pathlib import Path
 from typing import Tuple, Dict, List, Optional
+from dataclasses import dataclass
 import re
 
 def read_dftb_matrix(filepath: str | Path) -> Tuple[np.ndarray, int]:
@@ -600,9 +601,24 @@ def build_fragment_weight_matrix(
 # Constraint Potential I/O
 # =============================================================================
 
+@dataclass
+class ConstraintPotentials:
+    """Container for constraint potentials from CDFTB calculation.
+    
+    Attributes
+    ----------
+    V_N : float
+        Charge constraint potential in Hartree.
+    V_M : float or None
+        Spin constraint potential in Hartree (None if only charge constraint).
+    """
+    V_N: float
+    V_M: float | None = None
+
+
 def read_constraint_potential(dirpath: str | Path) -> float:
     """
-    Read constraint potential from final_Vc.dat.
+    Read charge constraint potential from final_Vc.dat (backward compatible).
     
     Parameters
     ----------
@@ -612,7 +628,30 @@ def read_constraint_potential(dirpath: str | Path) -> float:
     Returns
     -------
     Vc : float
-        Constraint potential in Hartree.
+        Charge constraint potential (V_N) in Hartree.
+        
+    Notes
+    -----
+    For both charge and spin potentials, use read_constraint_potentials().
+    """
+    potentials = read_constraint_potentials(dirpath)
+    return potentials.V_N
+
+
+def read_constraint_potentials(dirpath: str | Path) -> ConstraintPotentials:
+    """
+    Read constraint potentials from final_Vc.dat.
+    
+    Parameters
+    ----------
+    dirpath : str or Path
+        Path to the directory containing final_Vc.dat.
+        
+    Returns
+    -------
+    potentials : ConstraintPotentials
+        Container with V_N (charge constraint) and V_M (spin constraint).
+        V_M is None if only charge constraint was used.
         
     Notes
     -----
@@ -622,12 +661,15 @@ def read_constraint_potential(dirpath: str | Path) -> float:
         # Status: CONVERGED
         #
          # Index                 Vc [Ha]               Deviation
-             1   1.061753957522534E-01   9.341008028229680E-05
+             1   1.648901609322820E-01  -3.051595500380699E-04    <- V_N (charge)
+             2  -1.611135789411475E-02  -6.347210868229425E-05    <- V_M (spin)
     """
     filepath = Path(dirpath) / "final_Vc.dat"
     
     if not filepath.exists():
         raise FileNotFoundError(f"Constraint potential file not found: {filepath}")
+    
+    potentials = []
     
     with open(filepath, 'r') as f:
         for line in f:
@@ -640,12 +682,25 @@ def read_constraint_potential(dirpath: str | Path) -> float:
             if len(parts) >= 2:
                 try:
                     # Index, Vc, Deviation format
+                    index = int(parts[0])
                     Vc = float(parts[1])
-                    return Vc
+                    potentials.append((index, Vc))
                 except (ValueError, IndexError):
                     continue
     
-    raise ValueError("Could not parse constraint potential from final_Vc.dat")
+    if not potentials:
+        raise ValueError("Could not parse constraint potential from final_Vc.dat")
+    
+    # Sort by index
+    potentials.sort(key=lambda x: x[0])
+    
+    # First constraint is always charge (V_N)
+    V_N = potentials[0][1]
+    
+    # Second constraint (if present) is spin (V_M)
+    V_M = potentials[1][1] if len(potentials) > 1 else None
+    
+    return ConstraintPotentials(V_N=V_N, V_M=V_M)
 
 
 # =============================================================================
@@ -746,11 +801,14 @@ def load_spin_polarized_calculation(
     data['n_alpha'] = np.sum(occ_alpha > 0.5).astype(int)
     data['n_beta'] = np.sum(occ_beta > 0.5).astype(int)
     
-    # Read constraint potential (optional)
+    # Read constraint potentials (optional)
     try:
-        data['Vc'] = read_constraint_potential(dirpath)
+        potentials = read_constraint_potentials(dirpath)
+        data['Vc'] = potentials.V_N  # backward compatible
+        data['Vc_potentials'] = potentials  # new: contains V_N and V_M
     except FileNotFoundError:
         data['Vc'] = None
+        data['Vc_potentials'] = None
     
     # Read total energy (optional)
     try:
@@ -823,11 +881,14 @@ def load_spin_polarized_calculation_for_ci(
     data['n_alpha'] = np.sum(occ_alpha > 0.5).astype(int)
     data['n_beta'] = np.sum(occ_beta > 0.5).astype(int)
     
-    # Read constraint potential (optional)
+    # Read constraint potentials (optional)
     try:
-        data['Vc'] = read_constraint_potential(dirpath)
+        potentials = read_constraint_potentials(dirpath)
+        data['Vc'] = potentials.V_N  # backward compatible
+        data['Vc_potentials'] = potentials  # new: contains V_N and V_M
     except FileNotFoundError:
         data['Vc'] = None
+        data['Vc_potentials'] = None
     
     # Read total energy (optional)
     try:

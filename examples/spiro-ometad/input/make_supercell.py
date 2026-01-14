@@ -9,8 +9,7 @@ Available functions:
 """
 import sys
 from pathlib import Path
-sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "src"))
-from prep.cif2pdb import cif_to_pdb_wlhash  # WLハッシュ版（高速・正確）
+from qm4d4crystal.prep.cif2pdb import cif_to_pdb_wlhash  # WLハッシュ版（高速・正確）
 
 input_dir = Path(__file__).parent
 result = cif_to_pdb_wlhash(
@@ -18,7 +17,7 @@ result = cif_to_pdb_wlhash(
     output_pdb=str(input_dir / "spiro-ometad.pdb"),
     output_mol2=str(input_dir / "spiro-ometad_template.mol2"),
     output_box=str(input_dir / "spiro-ometad.box"),
-    supercell=(3, 3, 3),
-    resname="SPR",
-    mol_name="SPR"
+    supercell=(5, 5, 3),
+    resname="SPO",
+    mol_name="SPO"
 )

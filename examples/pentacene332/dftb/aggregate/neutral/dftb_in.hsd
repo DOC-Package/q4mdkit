@@ -1,0 +1,67 @@
+Geometry = GenFormat {
+  <<< "../pentacene.gen"
+}
+
+Hamiltonian = DFTB {
+  Charge = 0.0
+  HCorrection = Damping {
+    Exponent = 4.0
+  }
+  Scc = Yes
+  SCCTolerance = 1e-10
+  MaxSCCIterations = 900
+  ThirdOrderFull = Yes
+  ThirdOrder = No
+  HubbardDerivs {
+    H = -0.1857
+    C = -0.1492
+  }
+  SlaterKosterFiles {
+    C-C = '/home/takahashi/qmmm/sk/3ob/C-C.skf'
+    C-H = '/home/takahashi/qmmm/sk/3ob/C-H.skf'
+    H-C = '/home/takahashi/qmmm/sk/3ob/H-C.skf'
+    H-H = '/home/takahashi/qmmm/sk/3ob/H-H.skf'
+  }
+  MaxAngularMomentum {
+    C = "p"
+    H = "s"
+  }
+  Mixer = Broyden {
+    MixingParameter = 0.2
+  }
+  ReadInitialCharges = No
+}
+
+Driver = GeometryOptimization {
+  Optimizer = Rational {}
+  MovedAtoms = 1:-1
+  MaxSteps = 500
+  OutputPrefix = "geom.out"
+  Convergence {
+    Energy = 1e-7
+    GradElem = 1e-5
+    GradNorm = 1e-5
+    DispElem = 1e-5
+    DispNorm = 1e-5
+  }
+  AppendGeometries = Yes
+}
+
+Analysis {
+  PrintForces = Yes
+  WriteEigenvectors = Yes
+  EigenvectorsAsText = Yes
+  WriteBandOut = Yes
+  MullikenAnalysis = Yes
+  WriteNetCharges = Yes
+}
+
+ParserOptions {
+  ParserVersion = 14
+}
+
+Options {
+  WriteDetailedXML = Yes
+  WriteDetailedOut = Yes
+  TimingVerbosity = 2
+}

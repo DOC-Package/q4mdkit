@@ -1,0 +1,136 @@
+Geometry = xyzFormat {
+36
+title
+C     23.431201373544  37.845328258411  35.111788201280
+C     22.433446677360  37.807650746993  36.108077049711
+C     24.719001161178  37.185759266681  35.380613394866
+C     23.257034773768  38.499563357392  33.899429067847
+C     22.612210635036  37.177958749825  37.341417415624
+H     21.374134300987  38.419885263400  35.903973438382
+C     24.882459724932  36.519058173974  36.597276083422
+C     25.696054860767  37.230485846769  34.387069955354
+C     24.246895847948  38.553569318851  32.902730574391
+H     22.209454889035  39.075610240878  33.656239611435
+C     21.598580759761  37.123775308578  38.346443460760
+C     23.906713006161  36.500979645639  37.613689378993
+H     25.932976916440  35.926184317602  36.813326209351
+H     26.757195700419  36.635874712708  34.629824871653
+C     25.539468455372  37.885601639472  33.171002928686
+C     24.076637062534  39.156700071251  31.660524183490
+C     21.864492658070  36.574114184103  39.562706888570
+H     20.554862134035  37.714383478679  38.128545061712
+C     24.080915449629  35.887846613091  38.896123416286
+C     26.525742332131  37.869983769911  32.179258934014
+C     25.061095592994  39.165257724027  30.669287824217
+H     22.979564503564  39.684428489512  31.407105485251
+C     23.099614857371  35.941990169215  39.831812980499
+H     21.003463766703  36.578293470708  40.465574672771
+H     25.125906910379  35.264633424052  39.099383661156
+H     27.581272209956  37.277761682564  32.471273578696
+C     26.353413730012  38.495762987245  30.961603010443
+C     24.910747670180  39.788470459901  29.395286661793
+H     23.188506211218  35.448850652593  40.947443080828
+C     27.360215228352  38.523577490468  29.940852598100
+C     25.907772566493  39.785310881146  28.467479069495
+H     23.841626201849  40.345268967417  29.114268164672
+C     27.123115445227  39.113049342783  28.755054771573
+H     28.436590128634  37.985102617301  30.162351756272
+H     25.788195195826  40.338312167365  27.358725598835
+H     27.924648621942  39.082734843889  27.810469098500
+}
+Hamiltonian = DFTB {
+  ElectricField = {
+    PointCharges = {
+      GaussianBlurWidth [Angstrom] = 0.0
+      CoordsAndCharges [Angstrom] = DirectRead {
+        Records = 17604
+        File = 'PCcharges.dat'
+      }
+    }
+  }
+  HCorrection = Damping {
+    Exponent = 4.0
+  }
+  Scc = Yes
+  MaxSCCIterations = 300
+  ThirdOrderFull = Yes
+  ThirdOrder = No
+  HubbardDerivs = {
+    H = -0.1857
+    C = -0.1492
+  }
+  SlaterKosterFiles = {
+    C-C = '/home/takahashi/qmmm/sk/3ob/C-C.skf'
+    C-H = '/home/takahashi/qmmm/sk/3ob/C-H.skf'
+    H-C = '/home/takahashi/qmmm/sk/3ob/H-C.skf'
+    H-H = '/home/takahashi/qmmm/sk/3ob/H-H.skf'
+  }
+  MaxAngularMomentum = {
+    C = "p"
+    H = "s"
+  }
+  PolynomialRepulsive = {}
+  ShellResolvedSCC = No
+  OldSKInterpolation = No
+  ReadInitialCharges = No
+  InitialCharges = {}
+  SCCTolerance = 1.0000000000000001E-005
+  ConvergentSCCOnly = Yes
+  SpinPolarisation = {}
+  Solver = RelativelyRobust {}
+  Charge = 0.0000000000000000
+  OnSiteCorrection = {}
+  Dispersion = {}
+  Solvation = {}
+  Electrostatics = GammaFunctional {}
+  Differentiation = FiniteDiff {
+    Delta = 1.2207031250000000E-004
+  }
+  ForceEvaluation = "Traditional"
+  Mixer = Broyden {
+    MixingParameter = 0.20000000000000001
+    InverseJacobiWeight = 1.0000000000000000E-002
+    MinimalWeight = 1.0000000000000000
+    MaximalWeight = 100000.00000000000
+    WeightFactor = 1.0000000000000000E-002
+  }
+  Filling = Fermi {
+    Temperature = 0.0000000000000000
+  }
+}
+Options = {
+  WriteDetailedOut = Yes
+  WriteAutotestTag = No
+  WriteDetailedXML = No
+  WriteResultsTag = No
+  RestartFrequency = 20
+  RandomSeed = 0
+  WriteHS = No
+  WriteRealHS = No
+  MinimiseMemoryUsage = No
+  ShowFoldedCoords = No
+  TimingVerbosity = 1
+  WriteCharges = Yes
+  WriteChargesAsText = No
+  BinaryAccessTypes = {
+ "stream"
+  }
+}
+ParserOptions = {
+  ParserVersion = 14
+  WriteHSDInput = Yes
+  StopAfterParsing = No
+  IgnoreUnprocessedNodes = No
+}
+Analysis = {
+  PrintForces = Yes
+  ProjectStates = {}
+  WriteEigenvectors = No
+  WriteBandOut = Yes
+  MullikenAnalysis = Yes
+  WriteNetCharges = No
+  AtomResolvedEnergies = No
+}
+Reks = None {}
+Driver = {}
+ExcitedState = {}

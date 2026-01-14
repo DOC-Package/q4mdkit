@@ -49,10 +49,17 @@ class UnrestrictedCDFTBCIHamiltonian:
     W_BA_beta: float   # β contribution to W_BA
     W_AB_alpha: float  # α contribution to W_AB
     W_AB_beta: float   # β contribution to W_AB
-    V_A: float = 0.0  # Constraint potential for state A
-    V_B: float = 0.0  # Constraint potential for state B
+    V_A: float = 0.0  # Charge constraint potential for state A (V_N,A)
+    V_B: float = 0.0  # Charge constraint potential for state B (V_N,B)
     N_A: float = 0.0  # Target population for constraint A
     N_B: float = 0.0  # Target population for constraint B
+    # Spin constraint fields
+    V_M_A: float = 0.0  # Spin constraint potential for state A
+    V_M_B: float = 0.0  # Spin constraint potential for state B
+    M_A: float = 0.0  # Target spin for constraint A
+    M_B: float = 0.0  # Target spin for constraint B
+    W_M_BA: float = 0.0  # Spin weight overlap ⟨Φ^B|w^A_spin|Φ^A⟩
+    W_M_AB: float = 0.0  # Spin weight overlap ⟨Φ^A|w^B_spin|Φ^B⟩
     
     def save(self, filepath: str | Path, frame_id: int = 0, time_fs: float = 0.0) -> None:
         """
@@ -72,20 +79,37 @@ class UnrestrictedCDFTBCIHamiltonian:
         # Check if file exists to determine if we need header
         write_header = not filepath.exists()
         
+        # Check if spin constraint is used
+        has_spin_constraint = (self.V_M_A != 0.0 or self.V_M_B != 0.0 or 
+                               self.M_A != 0.0 or self.M_B != 0.0)
+        
         with open(filepath, 'a') as f:
             if write_header:
                 f.write("# CDFTB-CI Hamiltonian Parameters\n")
-                f.write("# Frame  Time(fs)  E_A(Ha)  E_B(Ha)  V_A(Ha)  V_B(Ha)  N_A  N_B  "
-                        "S_AB  S_AB_alpha  S_AB_beta  W_BA  W_AB  H_AB(Ha)  J(meV)\n")
+                if has_spin_constraint:
+                    f.write("# Frame  Time(fs)  E_A(Ha)  E_B(Ha)  V_N_A(Ha)  V_N_B(Ha)  N_A  N_B  "
+                            "V_M_A(Ha)  V_M_B(Ha)  M_A  M_B  "
+                            "S_AB  S_AB_alpha  S_AB_beta  W_BA  W_AB  W_M_BA  W_M_AB  H_AB(Ha)  J(meV)\n")
+                else:
+                    f.write("# Frame  Time(fs)  E_A(Ha)  E_B(Ha)  V_A(Ha)  V_B(Ha)  N_A  N_B  "
+                            "S_AB  S_AB_alpha  S_AB_beta  W_BA  W_AB  H_AB(Ha)  J(meV)\n")
             
             # Compute J
             J = self.H_AB - self.S_AB * (self.E_A + self.E_B) / 2
             J_meV = J * 27211.386
             
-            f.write(f"{frame_id:6d}  {time_fs:8.2f}  {self.E_A:14.10f}  {self.E_B:14.10f}  "
-                    f"{self.V_A:12.8f}  {self.V_B:12.8f}  {self.N_A:6.1f}  {self.N_B:6.1f}  "
-                    f"{self.S_AB:12.8f}  {self.S_AB_alpha:12.8f}  {self.S_AB_beta:12.8f}  "
-                    f"{self.W_BA:12.8f}  {self.W_AB:12.8f}  {self.H_AB:14.10f}  {J_meV:10.4f}\n")
+            if has_spin_constraint:
+                f.write(f"{frame_id:6d}  {time_fs:8.2f}  {self.E_A:14.10f}  {self.E_B:14.10f}  "
+                        f"{self.V_A:12.8f}  {self.V_B:12.8f}  {self.N_A:6.1f}  {self.N_B:6.1f}  "
+                        f"{self.V_M_A:12.8f}  {self.V_M_B:12.8f}  {self.M_A:6.1f}  {self.M_B:6.1f}  "
+                        f"{self.S_AB:12.8f}  {self.S_AB_alpha:12.8f}  {self.S_AB_beta:12.8f}  "
+                        f"{self.W_BA:12.8f}  {self.W_AB:12.8f}  {self.W_M_BA:12.8f}  {self.W_M_AB:12.8f}  "
+                        f"{self.H_AB:14.10f}  {J_meV:10.4f}\n")
+            else:
+                f.write(f"{frame_id:6d}  {time_fs:8.2f}  {self.E_A:14.10f}  {self.E_B:14.10f}  "
+                        f"{self.V_A:12.8f}  {self.V_B:12.8f}  {self.N_A:6.1f}  {self.N_B:6.1f}  "
+                        f"{self.S_AB:12.8f}  {self.S_AB_alpha:12.8f}  {self.S_AB_beta:12.8f}  "
+                        f"{self.W_BA:12.8f}  {self.W_AB:12.8f}  {self.H_AB:14.10f}  {J_meV:10.4f}\n")
 
 
 def compute_mo_overlap_matrix_spin(
@@ -270,12 +294,24 @@ def compute_coupling_element_unrestricted(
     N_B: float,
     S_AB: float,
     W_BA: float,
-    W_AB: float
+    W_AB: float,
+    V_M_A: float = 0.0,
+    V_M_B: float = 0.0,
+    M_A: float = 0.0,
+    M_B: float = 0.0,
+    W_M_BA: float = 0.0,
+    W_M_AB: float = 0.0
 ) -> float:
     """
-    Compute the coupling element H_AB (same formula as restricted).
+    Compute the coupling element H_AB with optional spin constraint.
     
-    H_AB = 1/2 (E_A + E_B + N_A V_A + N_B V_B) S_AB - 1/2 (V_A W_BA + V_B W_AB)
+    Without spin constraint:
+        H_AB = 1/2 (E_A + E_B + N_A V_N,A + N_B V_N,B) S_AB 
+               - 1/2 (V_N,A W_N,BA + V_N,B W_N,AB)
+    
+    With spin constraint:
+        H_AB = 1/2 (E_A + E_B + N_A V_N,A + M_A V_M,A + N_B V_N,B + M_B V_M,B) S_AB 
+               - 1/2 (V_N,A W_N,BA + V_M,A W_M,BA + V_N,B W_N,AB + V_M,B W_M,AB)
     
     Parameters
     ----------
@@ -284,9 +320,9 @@ def compute_coupling_element_unrestricted(
     E_B : float
         Total energy of state B (CDFTB energy).
     V_A : float
-        Constraint potential for state A.
+        Charge constraint potential for state A (V_N,A).
     V_B : float
-        Constraint potential for state B.
+        Charge constraint potential for state B (V_N,B).
     N_A : float
         Target population for constraint A.
     N_B : float
@@ -294,21 +330,94 @@ def compute_coupling_element_unrestricted(
     S_AB : float
         State overlap ⟨Φ^B|Φ^A⟩.
     W_BA : float
-        Weight overlap ⟨Φ^B|w^A|Φ^A⟩.
+        Charge weight overlap ⟨Φ^B|w^A_N|Φ^A⟩.
     W_AB : float
-        Weight overlap ⟨Φ^A|w^B|Φ^B⟩.
+        Charge weight overlap ⟨Φ^A|w^B_N|Φ^B⟩.
+    V_M_A : float, optional
+        Spin constraint potential for state A (V_M,A). Default is 0.0.
+    V_M_B : float, optional
+        Spin constraint potential for state B (V_M,B). Default is 0.0.
+    M_A : float, optional
+        Target spin population for constraint A. Default is 0.0.
+    M_B : float, optional
+        Target spin population for constraint B. Default is 0.0.
+    W_M_BA : float, optional
+        Spin weight overlap ⟨Φ^B|w^A_M|Φ^A⟩. Default is 0.0.
+    W_M_AB : float, optional
+        Spin weight overlap ⟨Φ^A|w^B_M|Φ^B⟩. Default is 0.0.
         
     Returns
     -------
     H_AB : float
         Coupling element.
     """
+    # Charge constraint terms
     term1 = 0.5 * (E_A + E_B + N_A * V_A + N_B * V_B) * S_AB
     term2 = 0.5 * (V_A * W_BA + V_B * W_AB)
+    
+    # Spin constraint terms (if present)
+    term1 += 0.5 * (M_A * V_M_A + M_B * V_M_B) * S_AB
+    term2 += 0.5 * (V_M_A * W_M_BA + V_M_B * W_M_AB)
     
     H_AB = term1 - term2
     
     return H_AB
+
+
+def compute_spin_weight_overlap_unrestricted(
+    O_BA_alpha: np.ndarray,
+    O_BA_beta: np.ndarray,
+    Omega_BA_alpha: np.ndarray,
+    Omega_BA_beta: np.ndarray
+) -> float:
+    """
+    Compute spin weight overlap W_M,BA = ⟨Φ^B|w^A_spin|Φ^A⟩.
+    
+    For spin constraint, the weight overlap is:
+        W_M,BA = S_AB × [Tr(O^{-1,α}_BA Ω^α_BA) - Tr(O^{-1,β}_BA Ω^β_BA)]
+    
+    Note the MINUS sign for beta, unlike charge weight overlap which uses plus.
+    This is because spin population = N_alpha - N_beta.
+    
+    Parameters
+    ----------
+    O_BA_alpha : np.ndarray
+        α MO overlap matrix (n_occ × n_occ).
+    O_BA_beta : np.ndarray
+        β MO overlap matrix (n_occ × n_occ).
+    Omega_BA_alpha : np.ndarray
+        α Ω matrix for fragment weight.
+    Omega_BA_beta : np.ndarray
+        β Ω matrix for fragment weight.
+        
+    Returns
+    -------
+    W_M_BA : float
+        Spin weight overlap.
+    """
+    # Compute state overlap
+    S_AB, S_AB_alpha, S_AB_beta = compute_state_overlap_unrestricted(
+        O_BA_alpha, O_BA_beta
+    )
+    
+    # α contribution
+    if O_BA_alpha.shape[0] > 0:
+        O_inv_alpha = np.linalg.inv(O_BA_alpha)
+        trace_alpha = np.trace(O_inv_alpha @ Omega_BA_alpha)
+    else:
+        trace_alpha = 0.0
+    
+    # β contribution (negative for spin)
+    if O_BA_beta.shape[0] > 0:
+        O_inv_beta = np.linalg.inv(O_BA_beta)
+        trace_beta = np.trace(O_inv_beta @ Omega_BA_beta)
+    else:
+        trace_beta = 0.0
+    
+    # Spin weight overlap: W_M_BA = S_AB × (trace_α - trace_β)
+    W_M_BA = S_AB * (trace_alpha - trace_beta)
+    
+    return W_M_BA
 
 
 def build_cdftbci_hamiltonian_unrestricted(
@@ -322,7 +431,11 @@ def build_cdftbci_hamiltonian_unrestricted(
     V_A: float,
     V_B: float,
     N_A: float,
-    N_B: float
+    N_B: float,
+    V_M_A: float = 0.0,
+    V_M_B: float = 0.0,
+    M_A: float = 0.0,
+    M_B: float = 0.0
 ) -> UnrestrictedCDFTBCIHamiltonian:
     """
     Build the 2x2 CDFTB-CI Hamiltonian matrix for unrestricted wavefunctions.
@@ -344,13 +457,21 @@ def build_cdftbci_hamiltonian_unrestricted(
     E_B : float
         Total energy of state B.
     V_A : float
-        Constraint potential for state A.
+        Charge constraint potential for state A (V_N,A).
     V_B : float
-        Constraint potential for state B.
+        Charge constraint potential for state B (V_N,B).
     N_A : float
         Target population for constraint A.
     N_B : float
         Target population for constraint B.
+    V_M_A : float, optional
+        Spin constraint potential for state A. Default is 0.0.
+    V_M_B : float, optional
+        Spin constraint potential for state B. Default is 0.0.
+    M_A : float, optional
+        Target spin population for constraint A. Default is 0.0.
+    M_B : float, optional
+        Target spin population for constraint B. Default is 0.0.
         
     Returns
     -------
@@ -390,7 +511,7 @@ def build_cdftbci_hamiltonian_unrestricted(
         orb_B.C_beta, orb_A.C_beta, w_B, orb_B.n_beta
     )
     
-    # Compute weight overlaps
+    # Compute charge weight overlaps
     W_BA, W_BA_alpha, W_BA_beta = compute_weight_overlap_unrestricted(
         O_BA_alpha, O_BA_beta, Omega_BA_alpha, Omega_BA_beta
     )
@@ -398,9 +519,21 @@ def build_cdftbci_hamiltonian_unrestricted(
         O_AB_alpha, O_AB_beta, Omega_AB_alpha, Omega_AB_beta
     )
     
+    # Compute spin weight overlaps (only if spin constraint is used)
+    W_M_BA = 0.0
+    W_M_AB = 0.0
+    if V_M_A != 0.0 or V_M_B != 0.0 or M_A != 0.0 or M_B != 0.0:
+        W_M_BA = compute_spin_weight_overlap_unrestricted(
+            O_BA_alpha, O_BA_beta, Omega_BA_alpha, Omega_BA_beta
+        )
+        W_M_AB = compute_spin_weight_overlap_unrestricted(
+            O_AB_alpha, O_AB_beta, Omega_AB_alpha, Omega_AB_beta
+        )
+    
     # Compute coupling element
     H_AB = compute_coupling_element_unrestricted(
-        E_A, E_B, V_A, V_B, N_A, N_B, S_AB, W_BA, W_AB
+        E_A, E_B, V_A, V_B, N_A, N_B, S_AB, W_BA, W_AB,
+        V_M_A, V_M_B, M_A, M_B, W_M_BA, W_M_AB
     )
     
     # Build 2x2 matrices
@@ -432,7 +565,13 @@ def build_cdftbci_hamiltonian_unrestricted(
         V_A=V_A,
         V_B=V_B,
         N_A=N_A,
-        N_B=N_B
+        N_B=N_B,
+        V_M_A=V_M_A,
+        V_M_B=V_M_B,
+        M_A=M_A,
+        M_B=M_B,
+        W_M_BA=W_M_BA,
+        W_M_AB=W_M_AB
     )
 
 
@@ -795,8 +934,10 @@ class CDFTBCIConfig(CDFTBConfig):
     """Configuration for CDFTB-CI analysis."""
     # CI settings
     ci_enabled: bool = True
-    ci_N_A: float = 101.0  # Target population for constraint A
-    ci_N_B: float = 101.0  # Target population for constraint B
+    ci_N_A: float = 101.0  # Target charge population for constraint A
+    ci_N_B: float = 101.0  # Target charge population for constraint B
+    ci_M_A: float = 0.0  # Target spin population for constraint A (0 if no spin constraint)
+    ci_M_B: float = 0.0  # Target spin population for constraint B (0 if no spin constraint)
     
     # Output mode
     output_mode: str = "online_ci"  # "online_ci" or "store_frames"
@@ -893,6 +1034,8 @@ def load_cdftbci_config(config_path: Path) -> CDFTBCIConfig:
     ci_enabled = ci_cfg.get('enabled', True)
     ci_N_A = ci_cfg.get('N_A', 101.0)
     ci_N_B = ci_cfg.get('N_B', 101.0)
+    ci_M_A = ci_cfg.get('M_A', 0.0)  # Spin constraint target for A
+    ci_M_B = ci_cfg.get('M_B', 0.0)  # Spin constraint target for B
     
     # Parse SCC settings
     scc_cfg = data.get('scc', {})
@@ -928,6 +1071,8 @@ def load_cdftbci_config(config_path: Path) -> CDFTBCIConfig:
         ci_enabled=ci_enabled,
         ci_N_A=ci_N_A,
         ci_N_B=ci_N_B,
+        ci_M_A=ci_M_A,
+        ci_M_B=ci_M_B,
         output_mode=output_mode,
         work_directory=work_directory,
         ci_output_file=ci_output_file,
@@ -971,6 +1116,8 @@ def setup_fragment_work_directory(
     hsd_template: Path,
     read_initial_charges: bool = False,
     disable_constraint: bool = False,
+    mixing_parameter: Optional[float] = None,
+    max_scc_iterations: Optional[int] = None,
 ) -> Path:
     """
     Set up fragment subdirectory within work directory.
@@ -989,6 +1136,10 @@ def setup_fragment_work_directory(
         Whether to read initial charges from charges.dat.
     disable_constraint : bool
         If True, disable the electronic constraint (for fallback calculations).
+    mixing_parameter : float, optional
+        Override MixingParameter in SCC block. None means use template value.
+    max_scc_iterations : int, optional
+        Override MaxSCCIterations in SCC block. None means use template value.
     """
     frag_dir = work_dir / fragment_name
     frag_dir.mkdir(parents=True, exist_ok=True)
@@ -1040,6 +1191,15 @@ def setup_fragment_work_directory(
             if 'Colinear' in spin_pol and 'InitialSpins' in spin_pol['Colinear']:
                 del spin_pol['Colinear']['InitialSpins']
     
+    # Override SCC parameters if specified
+    if mixing_parameter is not None:
+        if 'Mixer' in data['Hamiltonian']['DFTB']:
+            mixer = data['Hamiltonian']['DFTB']['Mixer']
+            if 'Broyden' in mixer:
+                mixer['Broyden']['MixingParameter'] = mixing_parameter
+    if max_scc_iterations is not None:
+        data['Hamiltonian']['DFTB']['MaxSCCIterations'] = max_scc_iterations
+    
     # Save modified HSD
     hsd_file = frag_dir / "dftb_in.hsd"
     with open(hsd_file, 'w') as f:
@@ -1063,9 +1223,32 @@ def compute_cdftbci_for_frame(
     E_B: float,
     N_A: float,
     N_B: float,
+    M_A: float = 0.0,
+    M_B: float = 0.0,
 ) -> Tuple[Optional[UnrestrictedCDFTBCIHamiltonian], Optional[float], Optional[float], Optional[str]]:
     """
     Compute CDFTB-CI quantities for current frame using data in work directory.
+    
+    Parameters
+    ----------
+    work_dir : Path
+        Working directory containing fragment calculations.
+    frag1_name : str
+        Name of first fragment directory.
+    frag2_name : str
+        Name of second fragment directory.
+    E_A : float
+        Total energy of state A.
+    E_B : float
+        Total energy of state B.
+    N_A : float
+        Target charge population for constraint A.
+    N_B : float
+        Target charge population for constraint B.
+    M_A : float, optional
+        Target spin population for constraint A. Default is 0.0.
+    M_B : float, optional
+        Target spin population for constraint B. Default is 0.0.
     """
     frag1_dir = work_dir / frag1_name
     frag2_dir = work_dir / frag2_name
@@ -1114,14 +1297,33 @@ def compute_cdftbci_for_frame(
             S_AO, frag_B_atoms, n_atoms, atom_to_orbitals=atom_to_orbitals
         )
         
-        # Get constraint potentials
-        V_A = data_A['Vc']
+        # Get constraint potentials (charge and spin)
+        V_A = data_A['Vc']  # charge constraint potential V_N
         V_B = data_B['Vc']
+        
+        # Get spin constraint potentials if available
+        V_M_A = 0.0
+        V_M_B = 0.0
+        M_A_target = 0.0
+        M_B_target = 0.0
+        
+        if data_A.get('Vc_potentials') is not None:
+            potentials_A = data_A['Vc_potentials']
+            if potentials_A.V_M is not None:
+                V_M_A = potentials_A.V_M
+                M_A_target = M_A  # Use passed M_A value
+        
+        if data_B.get('Vc_potentials') is not None:
+            potentials_B = data_B['Vc_potentials']
+            if potentials_B.V_M is not None:
+                V_M_B = potentials_B.V_M
+                M_B_target = M_B  # Use passed M_B value
         
         # Build CDFTB-CI Hamiltonian
         ham = build_cdftbci_hamiltonian_unrestricted(
             orb_A, orb_B, S_AO, w_A, w_B,
-            E_A, E_B, V_A, V_B, N_A, N_B
+            E_A, E_B, V_A, V_B, N_A, N_B,
+            V_M_A, V_M_B, M_A_target, M_B_target
         )
         
         # Compute transfer integrals
@@ -1193,8 +1395,9 @@ def run_cdftb_with_retry(
     
     Retry strategy:
     1. First attempt: Run with specified initial charges setting
-    2. If failed: Run DFTB to generate initial charges, then retry CDFTB with those charges
-    3. If still failed: Run without constraint and without reading initial charges
+    2. If failed: Run without reading initial charges
+    3. If failed: Run without initial charges + MixingParameter=0.05 + MaxSCCIterations=1000
+    4. If failed: Run without initial charges + MixingParameter=0.02 + MaxSCCIterations=1500
     
     Parameters
     ----------
@@ -1226,7 +1429,7 @@ def run_cdftb_with_retry(
     success : bool
         Whether calculation succeeded.
     retry_info : str
-        Information about retry attempts ("", "no_init_charges", "all_failed:...").
+        Information about retry attempts ("", "no_init_charges", "mix0.05", "mix0.02", "all_failed:...").
     """
     frag_dir = work_dir / frag.name
     retry_info = ""
@@ -1266,6 +1469,50 @@ def run_cdftb_with_retry(
     
     if error is None:
         retry_info = "no_init_charges"
+        return energy, mcharge, True, retry_info
+    
+    # Third attempt: MixingParameter=0.05, MaxSCCIterations=1000
+    print(f"    [Retry] Second attempt failed, trying with MixingParameter=0.05")
+    
+    frag_dir = setup_fragment_work_directory(
+        work_dir, frag.name, frag.atom_range, hsd_template,
+        read_initial_charges=False,
+        disable_constraint=False,
+        mixing_parameter=0.05,
+        max_scc_iterations=1000
+    )
+    
+    energy, mcharge, error = run_dftb_in_subprocess(
+        qm_coords_bohr, frag_dir, write_hs=False,
+        dftb_library_path=dftb_library_path,
+        num_threads=num_threads,
+        timeout=timeout
+    )
+    
+    if error is None:
+        retry_info = "mix0.05"
+        return energy, mcharge, True, retry_info
+    
+    # Fourth attempt: MixingParameter=0.02, MaxSCCIterations=1500
+    print(f"    [Retry] Third attempt failed, trying with MixingParameter=0.02")
+    
+    frag_dir = setup_fragment_work_directory(
+        work_dir, frag.name, frag.atom_range, hsd_template,
+        read_initial_charges=False,
+        disable_constraint=False,
+        mixing_parameter=0.02,
+        max_scc_iterations=1500
+    )
+    
+    energy, mcharge, error = run_dftb_in_subprocess(
+        qm_coords_bohr, frag_dir, write_hs=False,
+        dftb_library_path=dftb_library_path,
+        num_threads=num_threads,
+        timeout=timeout
+    )
+    
+    if error is None:
+        retry_info = "mix0.02"
         return energy, mcharge, True, retry_info
     
     # All attempts failed
@@ -1514,51 +1761,61 @@ def run_cdftbci_analysis(config_path: Path) -> None:
             retry_log_file.write("  ".join(retry_parts) + "\n")
             retry_log_file.flush()
             
-            # Compute CDFTB-CI if enabled and CDFTB was successful
-            if config.ci_enabled and cdftb_success and len(config.fragments) == 2:
-                E_A = energies[0]
-                E_B = energies[1]
-                
-                ham, J_direct, J_lowdin, ci_error = compute_cdftbci_for_frame(
-                    work_dir,
-                    config.fragments[0].name,
-                    config.fragments[1].name,
-                    E_A, E_B,
-                    config.ci_N_A, config.ci_N_B
-                )
-                
-                if ci_error:
-                    print(f"  CDFTB-CI: ERROR - {ci_error}")
-                    # Write NaN values
+            # Compute CDFTB-CI if enabled
+            if config.ci_enabled and len(config.fragments) == 2:
+                if not cdftb_success:
+                    # CDFTB failed - write NaN values
+                    print(f"  CDFTB-CI: SKIPPED (CDFTB convergence failed)")
                     ci_file.write(f"{frame_id:5d}  {time_val:8.2f}  {'nan':>12s}  "
                                   f"{'nan':>16s}  {'nan':>16s}  {'nan':>10s}\n")
-                    ci_sub_file.write(f"{frame_id:5d}  {time_val:8.2f}  " + "  ".join(["nan"] * 17) + "\n")
-                else:
-                    # Solve eigenvalue problem
-                    eigenvalues, _ = solve_cdftbci_unrestricted(ham.H, ham.S)
-                    
-                    J_direct_meV = J_direct * 27211.386
-                    J_lowdin_meV = J_lowdin * 27211.386
-                    dE_eV = (eigenvalues[1] - eigenvalues[0]) * 27.211386
-                    
-                    print(f"  CDFTB-CI: S_AB={ham.S_AB:.6f}, J={J_lowdin_meV:.2f} meV, ΔE={dE_eV:.4f} eV")
-                    
-                    # Write CI results
-                    ci_file.write(f"{frame_id:5d}  {time_val:8.2f}  {J_lowdin_meV:12.4f}  "
-                                  f"{eigenvalues[0]:16.10f}  {eigenvalues[1]:16.10f}  {dE_eV:10.6f}\n")
                     ci_file.flush()
-                    
-                    # Write CI sub values
-                    ci_sub_file.write(
-                        f"{frame_id:5d}  {time_val:8.2f}  {E_A:14.10f}  {E_B:14.10f}  "
-                        f"{ham.H_AB:14.10f}  {J_direct_meV:12.4f}  "
-                        f"{ham.V_A:14.10f}  {ham.V_B:14.10f}  "
-                        f"{ham.N_A:6.1f}  {ham.N_B:6.1f}  {ham.S_AB:14.10f}  "
-                        f"{ham.S_AB_alpha:14.10f}  {ham.S_AB_beta:14.10f}  "
-                        f"{ham.W_BA:14.10f}  {ham.W_BA_alpha:14.10f}  {ham.W_BA_beta:14.10f}  "
-                        f"{ham.W_AB:14.10f}  {ham.W_AB_alpha:14.10f}  {ham.W_AB_beta:14.10f}\n"
-                    )
+                    ci_sub_file.write(f"{frame_id:5d}  {time_val:8.2f}  " + "  ".join(["nan"] * 17) + "\n")
                     ci_sub_file.flush()
+                else:
+                    E_A = energies[0]
+                    E_B = energies[1]
+                    
+                    ham, J_direct, J_lowdin, ci_error = compute_cdftbci_for_frame(
+                        work_dir,
+                        config.fragments[0].name,
+                        config.fragments[1].name,
+                        E_A, E_B,
+                        config.ci_N_A, config.ci_N_B,
+                        config.ci_M_A, config.ci_M_B
+                    )
+                    
+                    if ci_error:
+                        print(f"  CDFTB-CI: ERROR - {ci_error}")
+                        # Write NaN values
+                        ci_file.write(f"{frame_id:5d}  {time_val:8.2f}  {'nan':>12s}  "
+                                      f"{'nan':>16s}  {'nan':>16s}  {'nan':>10s}\n")
+                        ci_sub_file.write(f"{frame_id:5d}  {time_val:8.2f}  " + "  ".join(["nan"] * 17) + "\n")
+                    else:
+                        # Solve eigenvalue problem
+                        eigenvalues, _ = solve_cdftbci_unrestricted(ham.H, ham.S)
+                        
+                        J_direct_meV = J_direct * 27211.386
+                        J_lowdin_meV = J_lowdin * 27211.386
+                        dE_eV = (eigenvalues[1] - eigenvalues[0]) * 27.211386
+                        
+                        print(f"  CDFTB-CI: S_AB={ham.S_AB:.6f}, J={J_lowdin_meV:.2f} meV, ΔE={dE_eV:.4f} eV")
+                        
+                        # Write CI results
+                        ci_file.write(f"{frame_id:5d}  {time_val:8.2f}  {J_lowdin_meV:12.4f}  "
+                                      f"{eigenvalues[0]:16.10f}  {eigenvalues[1]:16.10f}  {dE_eV:10.6f}\n")
+                        ci_file.flush()
+                        
+                        # Write CI sub values
+                        ci_sub_file.write(
+                            f"{frame_id:5d}  {time_val:8.2f}  {E_A:14.10f}  {E_B:14.10f}  "
+                            f"{ham.H_AB:14.10f}  {J_direct_meV:12.4f}  "
+                            f"{ham.V_A:14.10f}  {ham.V_B:14.10f}  "
+                            f"{ham.N_A:6.1f}  {ham.N_B:6.1f}  {ham.S_AB:14.10f}  "
+                            f"{ham.S_AB_alpha:14.10f}  {ham.S_AB_beta:14.10f}  "
+                            f"{ham.W_BA:14.10f}  {ham.W_BA_alpha:14.10f}  {ham.W_BA_beta:14.10f}  "
+                            f"{ham.W_AB:14.10f}  {ham.W_AB_alpha:14.10f}  {ham.W_AB_beta:14.10f}\n"
+                        )
+                        ci_sub_file.flush()
             
             # Compute spin populations for both constraint states
             if cdftb_success and len(config.fragments) == 2:

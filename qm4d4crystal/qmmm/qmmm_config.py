@@ -37,7 +37,8 @@ class DFTBTheory_LogSCC:
         from ash import DFTBTheory
         self._dftb = DFTBTheory(*args, **kwargs)
         self._callidx = 0
-        self._output_dir = Path(output_dir)
+        # Use absolute path to avoid issues when working directory changes
+        self._output_dir = Path(output_dir).resolve()
         self._output_dir.mkdir(parents=True, exist_ok=True)
         self._log = self._output_dir / scc_logfile
         self._keep_detailed = keep_detailed

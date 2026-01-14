@@ -12,7 +12,7 @@ input:
 
 # Output settings
 output:
-  directory: "output_test"          # Output directory
+  directory: "output_test_1e-3_adaptive"          # Output directory
   energy_file: "energies.dat"         # Energy output file
   charge_file: "charges.dat"          # Charge output file
   ci_file: "cdftbci.dat"              # CDFTB-CI results file
@@ -58,6 +58,10 @@ cdftb_ci:
   # For pentacene cation: neutral pentacene has 102 electrons, cation has 101
   N_A: 101
   N_B: 101
+  # Target spin population for constraint (spin on the constrained fragment)
+  # For cation radical: spin = 1.0 (one unpaired electron)
+  M_A: 1.0  # State A: spin localized on fragment 1
+  M_B: 1.0  # State B: spin localized on fragment 2
 
 # SCC settings
 scc:

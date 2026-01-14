@@ -1,0 +1,21 @@
+Geometry = GenFormat {
+  <<< "geom.out.gen"
+}
+
+Hessian {
+  <<< "hessian.out"
+}
+
+WriteHSDInput = Yes
+WriteXYZInput = Yes
+
+Atoms = 1:-1
+
+RemoveTranslation = Yes
+RemoveRotation = Yes
+
+WriteModes {
+  Animate = Yes
+  AnimateSteps = 10
+  AnimateScale = 1.0
+}

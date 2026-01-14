@@ -1,0 +1,10 @@
+source leaprc.gaff2
+SPO = loadmol2 spiro-ometad_gaff2.mol2
+loadamberparams spiro-ometad.frcmod
+
+X = loadPDB spiro-ometad.pdb
+check X
+charge X
+
+saveamberparm X spiro-ometad.prmtop spiro-ometad.inpcrd
+quit

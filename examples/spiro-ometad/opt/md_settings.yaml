@@ -1,0 +1,16 @@
+# MD Settings Configuration File for Spiro-OMeTAD
+# Settings for initial NVT equilibration after structure optimization
+
+# MD parameters
+md:
+  timestep: 0.001          # ps (1.0 fs) - conservative timestep for initial equilibration
+  traj_frequency: 50       # steps
+  nvt:
+    temperature: 300.0       # K
+    coupling_frequency: 1.0  # ps
+  simulation_time: 1.0       # ps (short initial test run)
+
+# Output settings
+output:
+  directory: "output"
+  save_gro: false

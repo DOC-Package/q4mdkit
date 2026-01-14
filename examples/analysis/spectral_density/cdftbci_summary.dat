@@ -1,0 +1,32 @@
+# CDFTB-CI Analysis Summary
+# ============================================================
+# Total frames: 199999
+# Time step: 4.0 fs
+# Total time: 800.00 ps
+# Temperature: 300 K
+# ============================================================
+#
+# Mean values
+# ------------------------------------------------------------
+J_mean_meV               60.3377   # |J| (meV)
+J_std_meV                22.0078   # σ_J (meV)
+dE1_mean_Ha           0.22776591   # <δE₁> (Ha)
+dE1_mean_eV             6.197829   # <δE₁> (eV)
+dE2_mean_Ha           0.23735148   # <δE₂> (Ha)
+dE2_mean_eV             6.458666   # <δE₂> (eV)
+dE_avg_mean_eV          6.328248   # (<δE₁>+<δE₂>)/2 (eV)
+dE_diff_mean_meV       -260.8369   # <δE₁-δE₂> (meV)
+#
+# Standard deviations (fluctuations)
+# ------------------------------------------------------------
+dE1_std_meV              66.1781   # σ_δE₁ (meV)
+dE2_std_meV              72.2824   # σ_δE₂ (meV)
+#
+# Reorganization energies λ = C(0)/(2kBT)
+# ------------------------------------------------------------
+lambda_J_cm              75.3100   # λ_J (cm⁻¹)
+lambda_J_meV              9.3372   # λ_J (meV)
+lambda_dE1_cm           684.3078   # λ_δE₁ (cm⁻¹)
+lambda_dE1_meV           84.8432   # λ_δE₁ (meV)
+lambda_dE2_cm           814.6815   # λ_δE₂ (cm⁻¹)
+lambda_dE2_meV          101.0075   # λ_δE₂ (meV)

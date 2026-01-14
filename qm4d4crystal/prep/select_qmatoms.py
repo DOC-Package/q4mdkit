@@ -229,6 +229,128 @@ def write_atom_list(atom_indices, filename):
         f.write(' '.join(map(str, atom_indices)) + '\n')
 
 
+def select_central_molecule(structure_file, n_active_molecules=None,
+                            output="qmatoms", active_output="active_atoms", verbose=False):
+    """
+    Select the single molecule closest to the center of the system for QM region.
+    
+    This is a simplified version of select_qmatoms that always selects exactly one
+    molecule - the one closest to the geometric center of the system.
+    
+    Args:
+        structure_file: Input GRO or PDB file path
+        n_active_molecules: Number of molecules for active region (default: 1, same as QM)
+        output: Output file for QM atom indices (default: "qmatoms")
+        active_output: Output file for active atom indices (default: "active_atoms")
+        verbose: Show detailed information
+    
+    Returns:
+        dict with 'qm_atoms', 'active_atoms', and 'central_molecule' (molecule info)
+    """
+    print("=" * 70)
+    print("QM Region Selection: Selecting the central molecule")
+    print("=" * 70)
+    
+    # Read structure file (GRO or PDB)
+    print(f"\nReading: {structure_file}")
+    coords, residues, box, natoms, title = read_structure_file(structure_file)
+    
+    box_center = box / 2.0
+    print(f"  Title: {title}")
+    print(f"  Total atoms: {natoms}")
+    print(f"  Number of molecules: {len(np.unique(residues))}")
+    print(f"  Box size: {box[0]:.3f} x {box[1]:.3f} x {box[2]:.3f} nm")
+    print(f"  Box center: ({box_center[0]:.3f}, {box_center[1]:.3f}, {box_center[2]:.3f}) nm")
+    
+    # Calculate center of mass for each molecule
+    print(f"\nCalculating center of mass for each molecule...")
+    molecules = calculate_molecule_centers(coords, residues)
+    atoms_per_molecule = len(molecules[0]['atom_indices'])
+    print(f"  Atoms per molecule: {atoms_per_molecule}")
+    
+    # Calculate geometric center of all atoms
+    system_center = coords.mean(axis=0)
+    print(f"  System center (geometric): ({system_center[0]:.3f}, {system_center[1]:.3f}, {system_center[2]:.3f}) nm")
+
+    # Find the single molecule closest to the center
+    print(f"\nSelecting the molecule closest to the system center...")
+    selected_molecules, _, molecules_sorted = find_closest_molecules(molecules, coords, n_molecules=1)
+    central_molecule = selected_molecules[0]
+    
+    # Display result
+    print(f"\nSelected central molecule:")
+    print(f"  {'Mol ID':<8} {'Center (nm)':<30} {'Distance (nm)':<12} {'Atom range':<15}")
+    print("  " + "-" * 65)
+    
+    center_str = f"({central_molecule['center'][0]:.3f}, {central_molecule['center'][1]:.3f}, {central_molecule['center'][2]:.3f})"
+    atom_min = min(central_molecule['atom_indices'])
+    atom_max = max(central_molecule['atom_indices'])
+    print(f"  {central_molecule['id']:<8} {center_str:<30} {central_molecule['distance_to_center']:<12.3f} "
+          f"{atom_min:4d}-{atom_max:4d}")
+    
+    all_qm_atoms = sorted(central_molecule['atom_indices'])
+    
+    print(f"\nQM region:")
+    print(f"  Total atoms: {len(all_qm_atoms)}")
+    print(f"  Atom index range: {min(all_qm_atoms)} - {max(all_qm_atoms)}")
+    if verbose:
+        print(f"  Atom list: {all_qm_atoms[:10]} ... {all_qm_atoms[-10:]}")
+    
+    # Active region selection (QM + surrounding molecules)
+    if n_active_molecules is None:
+        n_active_molecules = 1
+        
+    if n_active_molecules > 1:
+        print(f"\nActive region (atoms to move during optimization):")
+        print(f"  Central molecule + surrounding {n_active_molecules - 1} molecules")
+        active_molecules, _, _ = find_closest_molecules(molecules, coords, n_active_molecules)
+        all_active_atoms = []
+        for mol in active_molecules:
+            all_active_atoms.extend(mol['atom_indices'])
+        all_active_atoms.sort()
+        print(f"  Total atoms: {len(all_active_atoms)}")
+        print(f"  Atom index range: {min(all_active_atoms)} - {max(all_active_atoms)}")
+    else:
+        print(f"\nActive region:")
+        print(f"  Same as QM region ({len(all_qm_atoms)} atoms)")
+        all_active_atoms = all_qm_atoms
+    
+    # Write to files
+    write_atom_list(all_qm_atoms, output)
+    write_atom_list(all_active_atoms, active_output)
+    
+    print(f"\nOutput files:")
+    print(f"  {output} - atom indices for QM region ({len(all_qm_atoms)} atoms)")
+    print(f"  {active_output} - atom indices for active region in optimization ({len(all_active_atoms)} atoms)")
+    
+    if len(all_active_atoms) > len(all_qm_atoms):
+        print(f"\nRecommendation: Including MM atoms surrounding the QM region in the active region")
+        print(f"                reduces strain at the QM-MM boundary for more natural optimization")
+    
+    # Statistics
+    if verbose:
+        print(f"\nStatistics:")
+        print(f"  Distance range from center for all molecules:")
+        distances = [m['distance_to_center'] for m in molecules]
+        print(f"    Min: {min(distances):.3f} nm")
+        print(f"    Max: {max(distances):.3f} nm")
+        print(f"    Mean: {np.mean(distances):.3f} nm")
+        
+        print(f"\n  Top 10 molecules closest to center:")
+        for i, mol in enumerate(molecules_sorted[:10]):
+            print(f"    {i+1}. Molecule {mol['id']:2d}: {mol['distance_to_center']:.3f} nm")
+    
+    print("\n" + "=" * 70)
+    print("Done!")
+    print("=" * 70)
+    
+    return {
+        'qm_atoms': all_qm_atoms,
+        'active_atoms': all_active_atoms,
+        'central_molecule': central_molecule
+    }
+
+
 def select_qmatoms(structure_file, n_molecules=2, n_active_molecules=None, 
                    output="qmatoms", active_output="active_atoms", verbose=False,
                    distance_threshold=0.3, choice=None):
