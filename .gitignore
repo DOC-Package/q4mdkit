@@ -53,3 +53,22 @@ Thumbs.db
 .coverage
 htmlcov/
 .pytest_cache/
+
+# trajectory files
+*.dcd
+*.xtc
+*.trr
+*.lammpstrj
+*.netcdf
+*.nc
+*.xyz
+*.pdb
+*.gro
+*.mdcrd
+*.rst7
+*.crd
+*.arc
+*.mdf   
+
+# backup files
+repo-backup.bundle
