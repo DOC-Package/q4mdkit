@@ -132,25 +132,7 @@ H     30.548333349778  36.346782233361  28.130056346949
   Mixer = Broyden {
     MixingParameter = 0.2    # default 0.2
   }
-  ElectronicConstraints {
-      Constraints {
-        MullikenPopulation {
-          Atoms = 1:36
-          TotalCharge = 1.0
-        }
-        MullikenPopulation {
-          Atoms = 1:36
-          TotalSpin = 1.0 
-        }
-      }
-      Optimiser {
-        FIRE {}
-      }
-      ConstrTolerance = 1e-3
-      MaxConstrIterations = 100
-      ConvergentConstrOnly = Yes
-    }
-    ReadInitialCharges = No
+  ReadInitialCharges = No
 }
 Analysis {
   PrintForces = No

@@ -4,7 +4,7 @@
 
 # Input paths (relative to this config file directory)
 input:
-  trajectory: "traj/traj_part01.dcd"         # Trajectory file (DCD format)
+  trajectory: "traj/nve.dcd"         # Trajectory file (DCD format)
   topology: "traj/pentacene.pdb"      # Topology file (GRO/PDB/etc.)
   qm_atoms: "traj/qmatoms"            # QM atom indices file (0-indexed)
   pccharges_template: "input/PCcharges.dat"    # Point charges template

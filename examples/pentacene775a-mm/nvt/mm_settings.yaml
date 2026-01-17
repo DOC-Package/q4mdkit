@@ -1,0 +1,21 @@
+# MM Settings Configuration File
+# Pure force field MD simulation settings
+
+# File paths
+paths:
+  amber_prmtop: "/workspace/qmmm/pentacene775a-mm/input/pentacene.prmtop"
+  pdbfile: "/workspace/qmmm/pentacene775a-mm/input/pentacene.pdb"
+  boxfile: "/workspace/qmmm/pentacene775a-mm/input/pentacene.box"
+
+# Parallel settings
+parallel:
+  numcores: 32
+
+# OpenMM settings
+openmm:
+  periodic: true
+  periodic_nonbonded_cutoff: 9.0
+  use_boxfile: true
+  autoconstraints: HBonds
+  hydrogenmass: 1.0
+  platform: "CPU"

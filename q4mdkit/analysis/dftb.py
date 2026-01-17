@@ -28,8 +28,10 @@ from .cdftb import (
     iter_qm_coordinates,
     extract_atom_types_from_hsd,
     save_qm_coords_xyz,
-    run_dftb_in_subprocess,
 )
+import dftbplus
+import multiprocessing as mp
+import os
 
 
 @dataclass
@@ -60,6 +62,7 @@ class DFTBConfig:
     
     # SCC settings
     use_previous_charges: bool = False
+
 
 
 def load_dftb_config(config_path: Path) -> DFTBConfig:
@@ -157,35 +160,42 @@ def setup_work_directory(
 def setup_dftb_hsd(
     work_dir: Path,
     hsd_template: Path,
-    read_initial_charges: bool = False,
+    n_pc_records: Optional[int] = None,
+    use_previous_charges: bool = False,
 ) -> Path:
     """
-    Set up HSD file for closed-shell, non-constrained DFTB calculation.
-    
-    Removes SpinPolarisation and ElectronicConstraints from template.
+    Set up HSD file by updating coordinates and PCcharges paths.
+    Uses hsd library like cdftbci.
     """
-    # Load and modify HSD template
-    with open(hsd_template, 'r') as f:
-        data = hsd.load(f)
+    # Load template HSD
+    data = hsd.load(str(hsd_template))
     
-    # Remove Geometry from data (will be added as text reference)
+    # Remove Geometry section (will be added separately)
     if 'Geometry' in data:
         del data['Geometry']
     
-    # Remove SpinPolarisation for closed-shell calculation
-    if 'SpinPolarisation' in data['Hamiltonian']['DFTB']:
-        del data['Hamiltonian']['DFTB']['SpinPolarisation']
+    # Update PCcharges.dat path and Records count
+    if 'Hamiltonian' in data and 'DFTB' in data['Hamiltonian']:
+        dftb = data['Hamiltonian']['DFTB']
+        if 'ElectricField' in dftb and 'PointCharges' in dftb['ElectricField']:
+            pc = dftb['ElectricField']['PointCharges']
+            if 'CoordsAndCharges' in pc and 'DirectRead' in pc['CoordsAndCharges']:
+                pc['CoordsAndCharges']['DirectRead']['File'] = 'PCcharges.dat'
+                if n_pc_records is not None:
+                    pc['CoordsAndCharges']['DirectRead']['Records'] = n_pc_records
     
-    # Remove SpinConstants if present
-    if 'SpinConstants' in data['Hamiltonian']['DFTB']:
-        del data['Hamiltonian']['DFTB']['SpinConstants']
-    
-    # Remove ElectronicConstraints for non-constrained DFTB
-    if 'ElectronicConstraints' in data['Hamiltonian']['DFTB']:
-        del data['Hamiltonian']['DFTB']['ElectronicConstraints']
-    
-    # Set ReadInitialCharges
-    data['Hamiltonian']['DFTB']['ReadInitialCharges'] = 'Yes' if read_initial_charges else 'No'
+    # Set ReadInitialCharges if using previous frame's charges
+    if use_previous_charges and 'Hamiltonian' in data and 'DFTB' in data['Hamiltonian']:
+        data['Hamiltonian']['DFTB']['ReadInitialCharges'] = 'Yes'
+        # Need ReadChargesAsText to read text format charges.dat
+        if 'Options' not in data:
+            data['Options'] = {}
+        data['Options']['ReadChargesAsText'] = 'Yes'
+        # Remove InitialSpins when using ReadInitialCharges (they conflict)
+        if 'SpinPolarisation' in data['Hamiltonian']['DFTB']:
+            spin_pol = data['Hamiltonian']['DFTB']['SpinPolarisation']
+            if 'Colinear' in spin_pol and 'InitialSpins' in spin_pol['Colinear']:
+                del spin_pol['Colinear']['InitialSpins']
     
     # Save modified HSD
     hsd_file = work_dir / "dftb_in.hsd"
@@ -202,6 +212,72 @@ def setup_dftb_hsd(
     return hsd_file
 
 
+def run_dftb_calculation(qm_coords_bohr, work_dir, result_queue, dftb_library_path, num_threads):
+    """Run DFTB+ calculation in a separate process."""
+    try:
+        if num_threads is not None:
+            os.environ['OMP_NUM_THREADS'] = str(num_threads)
+        
+        original_dir = os.getcwd()
+        os.chdir(work_dir)
+        
+        cdftb = dftbplus.DftbPlus(
+            libpath=dftb_library_path,
+            hsdpath="dftb_in.hsd",
+            logfile="dftb.log",
+        )
+        cdftb.set_geometry(qm_coords_bohr)
+        energy = cdftb.get_energy()
+        mcharge = cdftb.get_gross_charges()
+        cdftb.close()
+        
+        os.chdir(original_dir)
+        result_queue.put(("success", energy, mcharge))
+    except Exception as e:
+        try:
+            os.chdir(original_dir)
+        except:
+            pass
+        result_queue.put(("error", str(e), None))
+
+
+def run_dftb_in_subprocess(qm_coords_bohr, work_dir,
+                           dftb_library_path="/home/takahashi/opt/dftb+/lib/libdftbplus.so",
+                           num_threads=None, timeout=300):
+    """Run DFTB+ in subprocess without modifying HSD."""
+    old_omp_threads = os.environ.get('OMP_NUM_THREADS')
+    if num_threads is not None:
+        os.environ['OMP_NUM_THREADS'] = str(num_threads)
+    
+    result_queue = mp.Queue()
+    proc = mp.Process(target=run_dftb_calculation, 
+                     args=(qm_coords_bohr, work_dir, result_queue, dftb_library_path, num_threads))
+    proc.start()
+    proc.join(timeout=timeout)
+    
+    if old_omp_threads is not None:
+        os.environ['OMP_NUM_THREADS'] = old_omp_threads
+    elif num_threads is not None:
+        del os.environ['OMP_NUM_THREADS']
+    
+    if proc.is_alive():
+        proc.terminate()
+        proc.join()
+        return None, None, "Timeout"
+    
+    if proc.exitcode != 0:
+        return None, None, f"Process crashed with exit code {proc.exitcode}"
+    
+    if result_queue.empty():
+        return None, None, "No result returned"
+    
+    status, energy_or_error, mcharge = result_queue.get()
+    if status == "success":
+        return energy_or_error, mcharge, None
+    else:
+        return None, None, energy_or_error
+
+
 def run_dftb_analysis(config_path: str):
     """
     Run standard DFTB analysis on trajectory frames.
@@ -215,7 +291,7 @@ def run_dftb_analysis(config_path: str):
     config = load_dftb_config(config_path)
     
     print("=" * 70)
-    print("DFTB Trajectory Analysis (Closed-shell, Non-constrained)")
+    print("DFTB Trajectory Analysis (Non-constrained)")
     print("=" * 70)
     print(f"Config file: {config_path}")
     print(f"Trajectory: {config.traj_path}")
@@ -284,20 +360,18 @@ def run_dftb_analysis(config_path: str):
                 frame_id, time_fs, atom_types
             )
             
-            # Determine if we should use initial charges
-            use_initial_charges = False
-            charges_file_path = work_dir / "charges.dat"
-            
-            if config.use_previous_charges and processed_count > 0:
-                if charges_file_path.exists():
-                    use_initial_charges = True
-            
-            # Set up HSD file (closed-shell, no constraints)
-            setup_dftb_hsd(work_dir, config.hsd_template, read_initial_charges=use_initial_charges)
+            # Set up HSD file
+            use_prev_charges = config.use_previous_charges and processed_count > 0
+            setup_dftb_hsd(
+                work_dir,
+                config.hsd_template,
+                n_pc_records=len(mm_charges),
+                use_previous_charges=use_prev_charges,
+            )
             
             # Run DFTB+ calculation
             energy, mcharge, error = run_dftb_in_subprocess(
-                qm_coords_bohr, work_dir, write_hs=False,
+                qm_coords_bohr, work_dir,
                 dftb_library_path=config.dftb_library_path,
                 num_threads=config.num_threads,
                 timeout=config.timeout

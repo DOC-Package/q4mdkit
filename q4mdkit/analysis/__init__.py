@@ -8,3 +8,14 @@ __all__ = [
     'run_dftb_analysis',
 ]
 """
+
+from .normal_mode_analysis import (
+    NormalModeAnalyzer,
+    analyze_trajectory,
+    calculate_displacements,
+    project_onto_normal_modes,
+    load_trajectory_mdtraj,
+    read_gen_file,
+    read_hessian_eigenvectors,
+    read_hessian_eigenvalues,
+)

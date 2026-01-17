@@ -1,0 +1,21 @@
+# MM Settings Configuration File
+# Pure force field MD simulation settings
+
+# File paths
+paths:
+  amber_prmtop: "../input/system.prmtop"
+  amber_inpcrd: "../input/system.inpcrd"
+
+# Parallel settings
+parallel:
+  numcores: 4
+
+# OpenMM settings
+openmm:
+  periodic: true
+  periodic_nonbonded_cutoff: 9.0
+  use_boxfile: false
+  autoconstraints: null
+  rigidwater: false
+  hydrogenmass: 1.5
+  platform: "CPU"

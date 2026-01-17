@@ -1,0 +1,23 @@
+# MD Settings Configuration File
+
+md:
+  timestep: 0.001
+  traj_frequency: 50
+  integrator:
+    nvt: "LangevinMiddleIntegrator"
+    npt: "LangevinMiddleIntegrator"
+    nve: "VelocityVerletIntegrator"
+  nvt:
+    temperature: 300.0
+    coupling_frequency: 1
+  npt:
+    barostat: "MonteCarloBarostat"
+    pressure: 1
+    barostat_frequency: 25
+  simulation_time:
+    nvt: 100.0
+    npt: 100.0
+    nve: 100.0
+
+output:
+  directory: "output"

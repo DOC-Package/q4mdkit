@@ -1,0 +1,33 @@
+======================================================================
+DFTB+ Hessian Analysis Report
+======================================================================
+
+## Matrix Information
+  Size: 108 x 108
+  Number of atoms: 36
+  Degrees of freedom: 108
+
+## Symmetry Check (Original Hessian)
+  Max |H - H^T|: 6.247000e-07
+  Mean |H - H^T|: 3.148371e-09
+  Symmetry: asymmetric (symmetrization applied)
+
+## Eigenvalue Analysis
+  Total eigenvalues: 108
+  |lambda| < 1e-4: 7 (rotational/translational modes)
+  |lambda| < 1e-5: 6
+  lambda < -1e-4: 0
+  lambda > 1e-4: 101 (vibrational modes)
+
+## Rotational/Translational Modes (6 smallest eigenvalues)
+  lambda_  1 = -1.9713413472e-08
+  lambda_  2 = -2.4461528193e-12
+  lambda_  3 = +2.7258663224e-12
+  lambda_  4 = +9.7793692937e-12
+  lambda_  5 = +1.0890653958e-08
+  lambda_  6 = +3.5820546381e-07
+
+## Conclusion
+  Note: 7 small eigenvalues detected
+
+======================================================================

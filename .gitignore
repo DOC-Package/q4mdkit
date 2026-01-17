@@ -33,13 +33,7 @@ ENV/
 *.swo
 *~
 
-# データファイル
-data/output/*
-!data/output/.gitkeep
-data/input/*
-!data/input/.gitkeep
-
-# ログファイル
+# log files
 *.log
 
 # OS
@@ -49,12 +43,10 @@ Thumbs.db
 # Jupyter
 .ipynb_checkpoints/
 
-# テストカバレッジ
-.coverage
-htmlcov/
+# pytest
 .pytest_cache/
 
-# trajectory files
+# files
 *.dcd
 *.xtc
 *.trr
@@ -69,6 +61,11 @@ htmlcov/
 *.crd
 *.arc
 *.mdf   
+*.log
+*.out
+*.dat
+*.bin
+*.xml
 
 # backup files
 q4mdkit.compat.bak/

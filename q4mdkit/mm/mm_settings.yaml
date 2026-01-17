@@ -1,0 +1,25 @@
+# MM (Force Field) Settings Configuration File
+# This is a simplified version of qmmm_settings.yaml for classical MD simulations
+
+# File paths
+paths:
+  # AMBER topology files
+  amber_prmtop: "/path/to/system.prmtop"
+  amber_inpcrd: "/path/to/system.inpcrd"
+  # Box file for PBC dimensions (optional)
+  # boxfile: "/path/to/boxvectors.dat"
+
+# Parallel settings
+parallel:
+  numcores: 4
+
+# OpenMM settings
+openmm:
+  periodic: true
+  periodic_nonbonded_cutoff: 9.0
+  # periodic_cell_dimensions: [50.0, 50.0, 50.0]  # or use use_boxfile
+  use_boxfile: false
+  autoconstraints: null
+  rigidwater: false
+  hydrogenmass: 1.5
+  platform: "CPU"  # CPU, CUDA, OpenCL
