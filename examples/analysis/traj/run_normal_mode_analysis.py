@@ -30,6 +30,7 @@ from q4mdkit.analysis.normal_mode_analysis import (
     plot_mode_correlation,
     plot_strong_correlations,
     print_correlation_summary,
+    rotation_angle,
 )
 
 
@@ -102,6 +103,7 @@ def main():
     
     mode_coords = results['mode_coords']
     rmsd = results['rmsd']
+    rot_angles = results['rotation_angles']
     
     print(f"\nResults:")
     print(f"  Mode coordinates shape: {mode_coords.shape}")
@@ -109,6 +111,10 @@ def main():
     print(f"    Mean: {np.mean(rmsd):.6f}")
     print(f"    Std:  {np.std(rmsd):.6f}")
     print(f"    Max:  {np.max(rmsd):.6f}")
+    print(f"  Rotation angle (degrees):")
+    print(f"    Mean: {np.mean(rot_angles):.4f}")
+    print(f"    Std:  {np.std(rot_angles):.4f}")
+    print(f"    Max:  {np.max(rot_angles):.4f}")
     
     # === Statistics ===
     print("\n" + "=" * 60)
@@ -138,6 +144,7 @@ def main():
     np.savez(npz_file,
              mode_coords=mode_coords,
              rmsd=rmsd,
+             rotation_angles=rot_angles,
              mode_indices=analyzer.mode_indices,
              frequencies_cm=frequencies,
              mean=stats['mean'],
@@ -161,13 +168,13 @@ def main():
             f.write(line + "\n")
     print(f"  -> {txt_file}")
     
-    # Save RMSD
+    # Save RMSD and rotation angles
     rmsd_file = f"{output_prefix}_rmsd.txt"
     with open(rmsd_file, 'w') as f:
-        f.write(f"# RMSD from reference structure (Angstrom)\n")
-        f.write(f"# frame  rmsd_angstrom\n")
-        for i, r in enumerate(rmsd):
-            f.write(f"{i:8d} {r:15.8e}\n")
+        f.write(f"# RMSD and rotation angles from reference structure\n")
+        f.write(f"# frame  rmsd_angstrom  rotation_deg\n")
+        for i, (r, angle) in enumerate(zip(rmsd, rot_angles)):
+            f.write(f"{i:8d} {r:15.8e} {angle:12.6f}\n")
     print(f"  -> {rmsd_file}")
     
     # Save summary statistics

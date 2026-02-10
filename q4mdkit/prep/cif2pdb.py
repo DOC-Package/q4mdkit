@@ -9,7 +9,8 @@ from ase.io import read, write as ase_write
 # Import from same directory
 from .mol_utils import (
     build_graph, split_molecules_pbc, unwrap_to_single_image, recenter_system, 
-    wrap_to_box, deterministic_template_order, best_isomorphism, best_isomorphism_fast
+    wrap_to_box, deterministic_template_order, best_isomorphism, best_isomorphism_fast,
+    coordinate_based_matching
 )
 
 
@@ -39,6 +40,7 @@ def load_cif_file(cif_file: str) -> Atoms:
     import warnings
     import tempfile
     import os
+    import re
     
     atoms = None
     
@@ -49,8 +51,11 @@ def load_cif_file(cif_file: str) -> Atoms:
         with open(cif_file, 'r') as f:
             cif_content = f.read()
         
-        # Check if CIF has explicit symmetry-equivalent atoms (e.g., labels like C1A*)
-        has_sym_equiv = '*' in cif_content or 'A*' in cif_content
+        # Check if CIF has explicit symmetry-equivalent atoms by looking for 
+        # atom labels with asterisks (e.g., "C1A*", "H1*") in the _atom_site section
+        # Simple '*' check can false-positive on math expressions like "Fc^*^"
+        atom_label_pattern = r'\n[A-Z][A-Za-z0-9]*\*'  # Atom labels start with capital letter, may contain *
+        has_sym_equiv = bool(re.search(atom_label_pattern, cif_content))
         
         if has_sym_equiv:
             # Modify the CIF to use P1 space group (no symmetry operations)
@@ -465,8 +470,10 @@ def write_mol2_single_molecule(path: str, atoms: Atoms, mol_indices: List[int],
 def cif_to_pdb(cif_file: str, output_pdb: str = None, output_mol2: str = None,
                output_box: str = None,
                supercell: tuple = (1, 1, 1), bond_scale: float = 1.10,
+               mol2_bond_scale: float = None,
                resname: str = "MOL", mol_name: str = "MOL",
-               recenter: bool = True, wrap: bool = True):
+               recenter: bool = True, wrap: bool = True,
+               strict_isomorphism: bool = True):
     """
     Convert CIF file to PDB supercell and mol2 template for GAFF2/AMBER.
     
@@ -476,11 +483,17 @@ def cif_to_pdb(cif_file: str, output_pdb: str = None, output_mol2: str = None,
         output_mol2: Output mol2 file path (default: {basename}_template.mol2)
         output_box: Output box file path (default: {basename}.box)
         supercell: Supercell dimensions (nx, ny, nz)
-        bond_scale: Covalent radii scale factor for bond detection
+        bond_scale: Covalent radii scale factor for molecule detection (can be larger
+                   for CIF files with poor H positions)
+        mol2_bond_scale: Covalent radii scale factor for mol2 bond detection.
+                        Default: min(bond_scale, 1.15) to avoid spurious bonds.
         resname: Residue name in PDB
         mol_name: Molecule name for mol2
         recenter: Recenter system to form compact cluster
         wrap: Wrap molecules back into simulation box
+        strict_isomorphism: If True, match molecules by (element, degree, H-neighbors).
+                           If False, match by element only - use for CIF files with 
+                           poor hydrogen positions.
     
     Returns:
         dict with 'pdb', 'mol2', 'box', 'n_atoms', 'n_molecules' keys
@@ -548,11 +561,23 @@ def cif_to_pdb(cif_file: str, output_pdb: str = None, output_mol2: str = None,
     per_mol_orders: Dict[int, List[int]] = {}
     per_mol_orders[0] = template_local_order
     # For other molecules: find isomorphism mapping to template
+    use_coord_matching = False
     for mi in range(1, len(comps)):
         idxs_i = comps[mi]
         mol_i = Atoms(numbers=all_numbers[idxs_i], positions=unwrapped_positions[mi])
-        mapping = best_isomorphism(mol_i, mol0, list(range(len(idxs_i))),
-                                   list(range(len(idxs0))), scale=bond_scale)
+        
+        try:
+            mapping = best_isomorphism(mol_i, mol0, list(range(len(idxs_i))),
+                                       list(range(len(idxs0))), scale=bond_scale,
+                                       strict=strict_isomorphism)
+        except RuntimeError:
+            # Graph isomorphism failed, fall back to coordinate-based matching
+            if not use_coord_matching:
+                print("[WARN] Graph isomorphism failed, falling back to coordinate-based matching")
+                use_coord_matching = True
+            mapping = coordinate_based_matching(mol_i, mol0, list(range(len(idxs_i))),
+                                                list(range(len(idxs0))))
+        
         inv = {v: k for k, v in mapping.items()}
         order_src_local = [inv[j] for j in template_local_order]
         per_mol_orders[mi] = order_src_local
@@ -562,10 +587,13 @@ def cif_to_pdb(cif_file: str, output_pdb: str = None, output_mol2: str = None,
     print(f"[OK] Wrote supercell PDB: {output_pdb}")
     
     # Write mol2 for template molecule (for GAFF2)
+    # Use smaller bond_scale for mol2 to avoid spurious bonds
+    if mol2_bond_scale is None:
+        mol2_bond_scale = min(bond_scale, 1.15)
     write_mol2_single_molecule(output_mol2, atoms, idxs0, template_local_order,
-                               unwrapped_positions[0], bond_scale=bond_scale,
+                               unwrapped_positions[0], bond_scale=mol2_bond_scale,
                                mol_name=mol_name)
-    print(f"[OK] Wrote template molecule mol2: {output_mol2}")
+    print(f"[OK] Wrote template molecule mol2: {output_mol2} (bond_scale={mol2_bond_scale})")
     print(f"[INFO] Use this mol2 file with antechamber/parmchk2 for GAFF2 parameterization")
     
     # Write box parameters file

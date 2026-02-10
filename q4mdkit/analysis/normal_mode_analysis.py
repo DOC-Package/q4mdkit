@@ -24,14 +24,11 @@ Author: q4mdkit
 import numpy as np
 from typing import Tuple, Optional, List, Union
 import warnings
-
-# MDAnalysis QCP rotation
 from MDAnalysis.lib.qcprot import CalcRMSDRotationalMatrix
 
 # Unit conversion constants
 ANGSTROM_TO_BOHR = 1.8897259886
 BOHR_TO_ANGSTROM = 1.0 / ANGSTROM_TO_BOHR
-
 
 # Atomic masses (element -> mass [amu])
 # Using values from DFTB+ SK files (3ob)
@@ -238,6 +235,42 @@ def remove_center_of_mass(coords: np.ndarray, masses: np.ndarray) -> np.ndarray:
         raise ValueError("coords must be 2D (N, 3) or 3D (n_frames, N, 3)")
 
 
+def rotation_angle(R: np.ndarray) -> np.ndarray:
+    """
+    Calculate rotation angle from rotation matrix/matrices.
+    
+    For a rotation matrix R, the rotation angle θ is given by:
+        Tr(R) = 1 + 2*cos(θ)
+        θ = arccos((Tr(R) - 1) / 2)
+    
+    Parameters
+    ----------
+    R : np.ndarray
+        Rotation matrix (3, 3) or array of rotation matrices (n_frames, 3, 3)
+    
+    Returns
+    -------
+    angle : np.ndarray
+        Rotation angle in degrees. Scalar for single matrix, (n_frames,) for multiple.
+    """
+    if R.ndim == 2:
+        trace = np.trace(R)
+        # Clamp to valid range for arccos due to numerical errors
+        cos_theta = np.clip((trace - 1) / 2, -1.0, 1.0)
+        angle_rad = np.arccos(cos_theta)
+        return np.degrees(angle_rad)
+    elif R.ndim == 3:
+        n_frames = R.shape[0]
+        angles = np.zeros(n_frames)
+        for i in range(n_frames):
+            trace = np.trace(R[i])
+            cos_theta = np.clip((trace - 1) / 2, -1.0, 1.0)
+            angles[i] = np.degrees(np.arccos(cos_theta))
+        return angles
+    else:
+        raise ValueError("R must be 2D (3, 3) or 3D (n_frames, 3, 3)")
+
+
 def qcp_rotation(P: np.ndarray, Q: np.ndarray, 
                  weights: Optional[np.ndarray] = None) -> Tuple[np.ndarray, float]:
     """
@@ -293,12 +326,6 @@ def qcp_rotation(P: np.ndarray, Q: np.ndarray,
     return R, rmsd
 
 
-
-
-
-
-
-
 def kabsch_rotation(P: np.ndarray, Q: np.ndarray, 
                     weights: Optional[np.ndarray] = None) -> np.ndarray:
     """
@@ -349,13 +376,15 @@ def align_to_reference(coords: np.ndarray, ref_coords: np.ndarray,
     Returns
     -------
     aligned_coords : np.ndarray
-        Aligned coordinates R @ coords (N, 3)
+        Aligned coordinates coords @ R (N, 3), using row vector convention
     R : np.ndarray
         Rotation matrix (3, 3)
     """
     # Use masses as weights
     R = kabsch_rotation(coords, ref_coords, weights=masses)
-    aligned_coords = (R @ coords.T).T
+    # MDAnalysis uses row vector convention: aligned = coords @ R
+    # This applies the same rotation R to each atom's coordinate vector
+    aligned_coords = coords @ R
     return aligned_coords, R
 
 
@@ -505,6 +534,302 @@ def project_onto_normal_modes(mw_displacements: np.ndarray,
     return mode_coords
 
 
+def remove_mass_weighting(mw_displacements: np.ndarray, masses: np.ndarray) -> np.ndarray:
+    """
+    Convert mass-weighted displacements back to Cartesian displacements.
+    
+    delta_r(t) = M^(-1/2) @ delta_x(t)
+    
+    Parameters
+    ----------
+    mw_displacements : np.ndarray
+        Mass-weighted displacements (n_frames, 3N) or (3N,)
+    masses : np.ndarray
+        Atomic masses (N,)
+    
+    Returns
+    -------
+    displacements : np.ndarray
+        Cartesian displacements (n_frames, N, 3) or (N, 3)
+    """
+    single_frame = mw_displacements.ndim == 1
+    if single_frame:
+        mw_displacements = mw_displacements[np.newaxis, :]
+    
+    n_frames = mw_displacements.shape[0]
+    n_atoms = len(masses)
+    
+    # Expand masses to 3N
+    inv_sqrt_masses_3n = 1.0 / np.sqrt(np.repeat(masses, 3))
+    
+    # Remove mass weighting
+    disp_flat = mw_displacements * inv_sqrt_masses_3n
+    
+    # Reshape to (n_frames, N, 3)
+    displacements = disp_flat.reshape(n_frames, n_atoms, 3)
+    
+    if single_frame:
+        return displacements[0]
+    return displacements
+
+
+def filter_mode_displacements(mw_displacements: np.ndarray,
+                               eigenvectors: np.ndarray,
+                               modes_to_remove: np.ndarray,
+                               masses: np.ndarray) -> np.ndarray:
+    """
+    Remove contribution of selected modes from displacements.
+    
+    Computes:
+        delta_x^(filtered)(t) = delta_x(t) - sum_{k in selected} d_k(t) * u_k
+    
+    where d_k(t) = u_k^T @ delta_x(t) is the projection onto mode k.
+    
+    Parameters
+    ----------
+    mw_displacements : np.ndarray
+        Mass-weighted displacements (n_frames, 3N) or (3N,)
+    eigenvectors : np.ndarray
+        Normal mode eigenvectors (3N, 3N), columns are modes
+    modes_to_remove : np.ndarray
+        Indices of modes to remove (0-indexed)
+    masses : np.ndarray
+        Atomic masses (N,)
+    
+    Returns
+    -------
+    filtered_displacements : np.ndarray
+        Filtered Cartesian displacements (n_frames, N, 3) or (N, 3)
+    """
+    single_frame = mw_displacements.ndim == 1
+    if single_frame:
+        mw_displacements = mw_displacements[np.newaxis, :]
+    
+    n_frames = mw_displacements.shape[0]
+    
+    # Get modes to remove
+    modes = eigenvectors[:, modes_to_remove]  # (3N, n_remove)
+    
+    # Project onto selected modes: d_k = u_k^T @ delta_x
+    mode_coords = mw_displacements @ modes  # (n_frames, n_remove)
+    
+    # Reconstruct contribution from selected modes: sum_k d_k * u_k
+    removed_contribution = mode_coords @ modes.T  # (n_frames, 3N)
+    
+    # Subtract from original
+    filtered_mw = mw_displacements - removed_contribution
+    
+    # Convert back to Cartesian
+    filtered_disp = remove_mass_weighting(filtered_mw, masses)
+    
+    if single_frame:
+        return filtered_disp[0]
+    return filtered_disp
+
+
+def reconstruct_filtered_trajectory(trajectory_coords: np.ndarray,
+                                     ref_coords: np.ndarray,
+                                     masses: np.ndarray,
+                                     eigenvectors: np.ndarray,
+                                     modes_to_remove: np.ndarray) -> np.ndarray:
+    """
+    Reconstruct trajectory with selected normal modes removed.
+    
+    Implements:
+        r_a^(filtered)(t) = R(t)^T @ [r_bar_a^(0) + delta_r_a^(filtered)(t)] + COM^(0)
+    
+    where:
+        - R(t) is the rotation matrix from axis-switching
+        - r_bar_a^(0) is the reference structure centered at COM
+        - delta_r_a^(filtered)(t) is the displacement with selected modes removed
+        - COM^(0) is the center of mass of the reference structure
+    
+    Parameters
+    ----------
+    trajectory_coords : np.ndarray
+        Original trajectory coordinates (n_frames, N, 3)
+    ref_coords : np.ndarray
+        Reference (optimized) structure coordinates (N, 3)
+    masses : np.ndarray
+        Atomic masses (N,)
+    eigenvectors : np.ndarray
+        Normal mode eigenvectors (3N, 3N), columns are modes
+    modes_to_remove : np.ndarray
+        Indices of modes to remove (0-indexed, e.g., [6, 7, 8] for first 3 vibrational modes)
+    
+    Returns
+    -------
+    filtered_trajectory : np.ndarray
+        Filtered trajectory coordinates (n_frames, N, 3)
+    
+    Notes
+    -----
+    This function performs the following steps:
+    1. Axis-switching: align each frame to reference and get rotation R(t)
+    2. Calculate displacements delta_r(t) = R(t) @ r_bar(t) - r_bar^(0)
+    3. Mass-weight displacements: delta_x(t) = M^(1/2) @ delta_r(t)
+    4. Remove selected mode contributions:
+       delta_x^(filtered)(t) = delta_x(t) - sum_{k in selected} d_k(t) * u_k
+    5. Convert back to Cartesian: delta_r^(filtered)(t) = M^(-1/2) @ delta_x^(filtered)(t)
+    6. Reconstruct: r^(filtered)(t) = R(t)^T @ [r_bar^(0) + delta_r^(filtered)(t)] + COM^(0)
+    """
+    n_frames = trajectory_coords.shape[0]
+    n_atoms = trajectory_coords.shape[1]
+    
+    # Reference structure center of mass
+    ref_com = center_of_mass(ref_coords, masses)
+    
+    # Center reference structure
+    ref_centered = remove_center_of_mass(ref_coords, masses)
+    
+    # Step 1 & 2: Calculate displacements and get rotation matrices
+    displacements, rotations = calculate_displacements(
+        trajectory_coords, ref_coords, masses, align=True
+    )
+    
+    # Step 3: Mass-weight displacements
+    mw_displacements = mass_weight_displacements(displacements, masses)
+    
+    # Step 4 & 5: Filter out selected modes (returns Cartesian displacements)
+    filtered_displacements = filter_mode_displacements(
+        mw_displacements, eigenvectors, modes_to_remove, masses
+    )
+    
+    # Step 6: Reconstruct trajectory
+    # r^(filtered)(t) = R(t)^T @ [r_bar^(0) + delta_r^(filtered)(t)] + COM^(0)
+    filtered_trajectory = np.zeros((n_frames, n_atoms, 3))
+    
+    for i in range(n_frames):
+        # r_bar^(0) + delta_r^(filtered)(t)
+        coords_in_ref_frame = ref_centered + filtered_displacements[i]
+        
+        # Apply inverse rotation R(t)^T (rotate back to lab frame)
+        # Since MDAnalysis convention: aligned = coords @ R
+        # Inverse: coords = aligned @ R^T
+        filtered_trajectory[i] = coords_in_ref_frame @ rotations[i].T
+        
+        # Add back reference COM
+        filtered_trajectory[i] += ref_com
+    
+    return filtered_trajectory
+
+
+def create_mode_filtered_trajectory(trajectory_coords: np.ndarray,
+                                     ref_coords: np.ndarray,
+                                     masses: np.ndarray,
+                                     eigenvectors: np.ndarray,
+                                     modes_to_remove: Union[List[int], np.ndarray],
+                                     mode_offset: int = 0) -> dict:
+    """
+    Create trajectory with selected normal modes removed (high-level interface).
+    
+    This is a convenience function that handles mode index conversion and
+    returns additional analysis information.
+    
+    Parameters
+    ----------
+    trajectory_coords : np.ndarray
+        Original trajectory coordinates (n_frames, N, 3)
+    ref_coords : np.ndarray
+        Reference (optimized) structure coordinates (N, 3)
+    masses : np.ndarray
+        Atomic masses (N,)
+    eigenvectors : np.ndarray
+        Normal mode eigenvectors (3N, 3N), columns are modes
+    modes_to_remove : list or array
+        Mode indices to remove. These are 0-indexed internal indices.
+        For vibrational modes, typically starts from 6 (after 6 trans/rot modes).
+    mode_offset : int
+        Offset to add to mode indices for display purposes (default: 0).
+        Set to 1 if you want 1-indexed mode numbers in output.
+    
+    Returns
+    -------
+    result : dict
+        Dictionary containing:
+        - 'filtered_trajectory': Filtered coordinates (n_frames, N, 3)
+        - 'original_trajectory': Original coordinates (n_frames, N, 3)
+        - 'modes_removed': List of removed mode indices
+        - 'removed_mode_coords': Mode coordinates of removed modes (n_frames, n_removed)
+        - 'rmsd_original': RMSD from reference for original trajectory
+        - 'rmsd_filtered': RMSD from reference for filtered trajectory
+    """
+    modes_to_remove = np.asarray(modes_to_remove)
+    
+    # Reconstruct filtered trajectory
+    filtered_trajectory = reconstruct_filtered_trajectory(
+        trajectory_coords, ref_coords, masses, eigenvectors, modes_to_remove
+    )
+    
+    # Calculate mode coordinates for removed modes (for analysis)
+    displacements, _ = calculate_displacements(
+        trajectory_coords, ref_coords, masses, align=True
+    )
+    mw_displacements = mass_weight_displacements(displacements, masses)
+    removed_mode_coords = project_onto_normal_modes(
+        mw_displacements, eigenvectors, modes_to_remove
+    )
+    
+    # Calculate RMSDs
+    ref_centered = remove_center_of_mass(ref_coords, masses)
+    
+    # Original RMSD
+    orig_disp, _ = calculate_displacements(trajectory_coords, ref_coords, masses, align=True)
+    rmsd_original = np.sqrt(np.mean(orig_disp**2, axis=(1, 2)))
+    
+    # Filtered RMSD
+    filt_disp, _ = calculate_displacements(filtered_trajectory, ref_coords, masses, align=True)
+    rmsd_filtered = np.sqrt(np.mean(filt_disp**2, axis=(1, 2)))
+    
+    return {
+        'filtered_trajectory': filtered_trajectory,
+        'original_trajectory': trajectory_coords,
+        'modes_removed': modes_to_remove + mode_offset,
+        'removed_mode_coords': removed_mode_coords,
+        'rmsd_original': rmsd_original,
+        'rmsd_filtered': rmsd_filtered,
+    }
+
+
+def save_filtered_trajectory_xyz(filename: str,
+                                  coords: np.ndarray,
+                                  atom_types: List[str],
+                                  comment_prefix: str = "filtered",
+                                  times: Optional[np.ndarray] = None) -> None:
+    """
+    Save filtered trajectory to XYZ format file.
+    
+    Parameters
+    ----------
+    filename : str
+        Output file path
+    coords : np.ndarray
+        Coordinates (n_frames, N, 3) in Angstrom
+    atom_types : list
+        List of element symbols
+    comment_prefix : str
+        Prefix for comment line (default: "filtered")
+    times : np.ndarray, optional
+        Time values for each frame
+    """
+    n_frames = coords.shape[0]
+    n_atoms = coords.shape[1]
+    
+    with open(filename, 'w') as f:
+        for frame_idx in range(n_frames):
+            f.write(f"{n_atoms}\n")
+            if times is not None:
+                f.write(f"{comment_prefix} frame={frame_idx} time={times[frame_idx]:.6f}\n")
+            else:
+                f.write(f"{comment_prefix} frame={frame_idx}\n")
+            
+            for atom_idx in range(n_atoms):
+                x, y, z = coords[frame_idx, atom_idx]
+                f.write(f"{atom_types[atom_idx]:2s} {x:20.10f} {y:20.10f} {z:20.10f}\n")
+    
+    print(f"Saved filtered trajectory to {filename} ({n_frames} frames)")
+
+
 def analyze_trajectory(trajectory_coords: np.ndarray,
                        ref_coords: np.ndarray,
                        masses: np.ndarray,
@@ -557,10 +882,14 @@ def analyze_trajectory(trajectory_coords: np.ndarray,
     # Calculate RMSD
     rmsd = np.sqrt(np.mean(displacements**2, axis=(1, 2)))
     
+    # Calculate rotation angles
+    rot_angles = rotation_angle(rotations) if rotations is not None else None
+    
     results = {
         'mode_coords': mode_coords,
         'displacements': displacements,
         'rotations': rotations,
+        'rotation_angles': rot_angles,
         'rmsd': rmsd,
         'mode_indices': mode_indices,
     }
@@ -1290,6 +1619,57 @@ class NormalModeAnalyzer:
         if freq is None:
             freq = np.ones(self.n_modes)  # Dummy values
         return calculate_mode_statistics(mode_coords, freq, temperature)
+    
+    def create_filtered_trajectory(self, 
+                                    trajectory_coords: np.ndarray,
+                                    modes_to_remove: Union[List[int], np.ndarray]) -> dict:
+        """
+        Create trajectory with selected normal modes removed.
+        
+        Parameters
+        ----------
+        trajectory_coords : np.ndarray
+            Original trajectory coordinates (n_frames, N, 3)
+        modes_to_remove : list or array
+            Mode indices to remove (0-indexed).
+            For vibrational modes, typically starts from 6.
+        
+        Returns
+        -------
+        result : dict
+            Dictionary containing:
+            - 'filtered_trajectory': Filtered coordinates (n_frames, N, 3)
+            - 'original_trajectory': Original coordinates
+            - 'modes_removed': List of removed mode indices
+            - 'removed_mode_coords': Mode coordinates of removed modes
+            - 'rmsd_original': RMSD from reference for original trajectory
+            - 'rmsd_filtered': RMSD from reference for filtered trajectory
+        """
+        return create_mode_filtered_trajectory(
+            trajectory_coords, self.ref_coords, self.masses,
+            self.eigenvectors, modes_to_remove
+        )
+    
+    def save_filtered_trajectory(self,
+                                  filename: str,
+                                  filtered_coords: np.ndarray,
+                                  times: Optional[np.ndarray] = None) -> None:
+        """
+        Save filtered trajectory to XYZ file.
+        
+        Parameters
+        ----------
+        filename : str
+            Output file path
+        filtered_coords : np.ndarray
+            Filtered coordinates (n_frames, N, 3)
+        times : np.ndarray, optional
+            Time values for each frame
+        """
+        save_filtered_trajectory_xyz(
+            filename, filtered_coords, self.atom_types, 
+            comment_prefix="filtered", times=times
+        )
 
 
 def load_trajectory_mdtraj(dcd_file: str, top_file: str,

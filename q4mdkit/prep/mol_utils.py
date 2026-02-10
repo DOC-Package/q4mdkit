@@ -162,10 +162,19 @@ def deterministic_template_order(G: nx.Graph, atoms: Atoms, idxs: List[int]) -> 
 
 
 def best_isomorphism(src: Atoms, ref: Atoms, src_idxs: List[int], ref_idxs: List[int], 
-                    scale: float = 1.10) -> Dict[int, int]:
+                    scale: float = 1.10, strict: bool = True) -> Dict[int, int]:
     """
     Find graph isomorphism mapping minimizing RMSD (Kabsch alignment).
     See MOL_UTILS_USAGE.md for details.
+    
+    Args:
+        src: Source Atoms object
+        ref: Reference Atoms object  
+        src_idxs: Indices of atoms in source molecule
+        ref_idxs: Indices of atoms in reference molecule
+        scale: Bond scale factor for graph construction
+        strict: If True, match by (Z, degree, H-neighbors). If False, match by Z only.
+                Use strict=False for CIF files with poor hydrogen positions.
     
     WARNING: This is slow for large molecules (>50 atoms). Use best_isomorphism_fast instead.
     """
@@ -179,8 +188,13 @@ def best_isomorphism(src: Atoms, ref: Atoms, src_idxs: List[int], ref_idxs: List
     Gs = build_graph(sub_s, scale)
     Gr = build_graph(sub_r, scale)
 
-    def node_match(n1, n2):
-        return (n1["Z"] == n2["Z"]) and (n1["deg"] == n2["deg"]) and (n1["hnb"] == n2["hnb"])
+    if strict:
+        def node_match(n1, n2):
+            return (n1["Z"] == n2["Z"]) and (n1["deg"] == n2["deg"]) and (n1["hnb"] == n2["hnb"])
+    else:
+        # Relaxed matching: only require same element
+        def node_match(n1, n2):
+            return n1["Z"] == n2["Z"]
 
     GM = nx.algorithms.isomorphism.GraphMatcher(Gs, Gr, node_match=node_match)
 
@@ -214,6 +228,105 @@ def best_isomorphism(src: Atoms, ref: Atoms, src_idxs: List[int], ref_idxs: List
         raise RuntimeError("Graph isomorphism failed; try adjusting --bond-scale or ensure H atoms are present.")
     
     return best_map
+
+
+def coordinate_based_matching(src: Atoms, ref: Atoms, src_idxs: List[int], ref_idxs: List[int],
+                              max_rmsd: float = 3.0) -> Dict[int, int]:
+    """
+    Match atoms between two molecules using coordinate-based alignment.
+    
+    This is more robust than graph isomorphism for CIF files with poor hydrogen positions,
+    as it does not rely on bond connectivity. Instead, it:
+    1. Groups atoms by element
+    2. For each element group, finds optimal assignment via Hungarian algorithm
+    3. Returns mapping from source to reference indices
+    
+    Args:
+        src: Source Atoms object
+        ref: Reference Atoms object
+        src_idxs: Indices of atoms in source molecule
+        ref_idxs: Indices of atoms in reference molecule
+        max_rmsd: Maximum RMSD threshold for matching validation (heavy atoms only)
+        
+    Returns:
+        Dictionary mapping source local indices to reference local indices
+    """
+    from scipy.optimize import linear_sum_assignment
+    from scipy.spatial.distance import cdist
+    
+    # Extract sub-molecules
+    src_nums = src.numbers[src_idxs]
+    ref_nums = ref.numbers[ref_idxs]
+    src_pos = src.positions[src_idxs]
+    ref_pos = ref.positions[ref_idxs]
+    
+    # Center both molecules
+    src_pos_c = src_pos - src_pos.mean(0)
+    ref_pos_c = ref_pos - ref_pos.mean(0)
+    
+    # Kabsch alignment (using all heavy atoms for initial alignment)
+    heavy_src = src_nums > 1
+    heavy_ref = ref_nums > 1
+    
+    # Sort heavy atoms by element for initial pairing
+    src_heavy_order = np.lexsort((src_pos_c[heavy_src, 2], src_pos_c[heavy_src, 1], 
+                                   src_pos_c[heavy_src, 0], src_nums[heavy_src]))
+    ref_heavy_order = np.lexsort((ref_pos_c[heavy_ref, 2], ref_pos_c[heavy_ref, 1],
+                                   ref_pos_c[heavy_ref, 0], ref_nums[heavy_ref]))
+    
+    src_heavy_pos = src_pos_c[heavy_src][src_heavy_order]
+    ref_heavy_pos = ref_pos_c[heavy_ref][ref_heavy_order]
+    
+    # Kabsch rotation
+    H = src_heavy_pos.T @ ref_heavy_pos
+    U, S, Vt = np.linalg.svd(H)
+    d = np.sign(np.linalg.det(Vt.T @ U.T))
+    R = Vt.T @ np.diag([1, 1, d]) @ U.T
+    
+    # Apply rotation to source
+    src_pos_rot = src_pos_c @ R
+    
+    # Now match atoms element by element using Hungarian algorithm
+    mapping = {}
+    elements = set(src_nums)
+    
+    for elem in elements:
+        src_elem_mask = src_nums == elem
+        ref_elem_mask = ref_nums == elem
+        
+        src_elem_idxs = np.where(src_elem_mask)[0]
+        ref_elem_idxs = np.where(ref_elem_mask)[0]
+        
+        if len(src_elem_idxs) != len(ref_elem_idxs):
+            raise RuntimeError(f"Element {elem}: count mismatch ({len(src_elem_idxs)} vs {len(ref_elem_idxs)})")
+        
+        # Distance matrix
+        src_elem_pos = src_pos_rot[src_elem_mask]
+        ref_elem_pos = ref_pos_c[ref_elem_mask]
+        dist_matrix = cdist(src_elem_pos, ref_elem_pos)
+        
+        # Hungarian algorithm for optimal assignment
+        row_ind, col_ind = linear_sum_assignment(dist_matrix)
+        
+        for i, j in zip(row_ind, col_ind):
+            mapping[int(src_elem_idxs[i])] = int(ref_elem_idxs[j])
+    
+    # Validate mapping by computing RMSD (heavy atoms only for CIF tolerance)
+    heavy_src_local = [i for i in mapping.keys() if src_nums[i] > 1]
+    if heavy_src_local:
+        src_heavy_ordered = src_pos_rot[np.array(heavy_src_local)]
+        ref_heavy_ordered = ref_pos_c[np.array([mapping[k] for k in heavy_src_local])]
+        rmsd = np.sqrt(np.mean(np.sum((src_heavy_ordered - ref_heavy_ordered)**2, axis=1)))
+    else:
+        # Fall back to all atoms if no heavy atoms
+        src_ordered = src_pos_rot[np.array(sorted(mapping.keys()))]
+        ref_ordered = ref_pos_c[np.array([mapping[k] for k in sorted(mapping.keys())])]
+        rmsd = np.sqrt(np.mean(np.sum((src_ordered - ref_ordered)**2, axis=1)))
+    
+    if rmsd > max_rmsd:
+        raise RuntimeError(f"Coordinate matching RMSD ({rmsd:.3f}) exceeds threshold ({max_rmsd})")
+    
+    return mapping
 
 
 def weisfeiler_lehman_hash(G: nx.Graph, iterations: int = 3) -> Dict[int, str]:

@@ -44,10 +44,14 @@ class DFTBConfig:
     pccharges_template: Path
     hsd_template: Path
     
+    # Optional: separate QM trajectory file (DCD format)
+    qm_traj_path: Optional[Path] = None
+    qm_topology_path: Optional[Path] = None
+    
     # Output paths
-    output_dir: Path
-    energy_file: Path
-    work_directory: str
+    output_dir: Path = None
+    energy_file: Path = None
+    work_directory: str = "work"
     
     # Frame selection
     start_frame: int = 0
@@ -92,6 +96,16 @@ def load_dftb_config(config_path: Path) -> DFTBConfig:
     pccharges_template = base_dir / input_cfg['pccharges_template']
     hsd_template = base_dir / input_cfg['hsd_template']
     
+    # Optional: separate QM trajectory file (DCD format)
+    qm_traj_path = None
+    qm_topology_path = None
+    if 'qm_trajectory' in input_cfg:
+        qm_traj_path = base_dir / input_cfg['qm_trajectory']
+        if 'qm_topology' in input_cfg:
+            qm_topology_path = base_dir / input_cfg['qm_topology']
+        else:
+            raise ValueError("qm_topology is required when qm_trajectory is specified")
+    
     # Parse output paths
     output_cfg = data.get('output', {})
     output_dir = base_dir / output_cfg.get('directory', 'output')
@@ -121,6 +135,8 @@ def load_dftb_config(config_path: Path) -> DFTBConfig:
         qm_atoms_file=qm_atoms_file,
         pccharges_template=pccharges_template,
         hsd_template=hsd_template,
+        qm_traj_path=qm_traj_path,
+        qm_topology_path=qm_topology_path,
         output_dir=output_dir,
         energy_file=output_dir / energy_file,
         work_directory=work_directory,
@@ -133,6 +149,75 @@ def load_dftb_config(config_path: Path) -> DFTBConfig:
         timeout=timeout,
         use_previous_charges=use_previous_charges,
     )
+
+
+def iter_qm_coordinates_separate(
+    qm_traj_path: Path,
+    qm_top_path: Path,
+    traj_path: Path,
+    top_path: Path,
+    mm_indices: np.ndarray,
+    chunk_size: int = 10,
+):
+    """
+    Yield (global_frame_idx, time_fs, qm_coords_bohr, mm_coords_ang) for each trajectory frame,
+    reading QM coordinates from a separate trajectory file (DCD/XTC etc.).
+    
+    Parameters
+    ----------
+    qm_traj_path : Path
+        Path to QM trajectory file (DCD/XTC etc.) containing only QM atoms.
+    qm_top_path : Path
+        Path to topology file for QM trajectory.
+    traj_path : Path
+        Path to main trajectory file (DCD/XTC etc.) for MM coordinates.
+    top_path : Path
+        Path to topology file for main trajectory.
+    mm_indices : np.ndarray
+        Indices of MM atoms in the main trajectory.
+    chunk_size : int
+        Number of frames to load at a time.
+    """
+    if not qm_traj_path.exists():
+        raise FileNotFoundError(f"QM trajectory not found: {qm_traj_path}")
+    if not qm_top_path.exists():
+        raise FileNotFoundError(f"QM topology not found: {qm_top_path}")
+    if not traj_path.exists():
+        raise FileNotFoundError(f"Trajectory not found: {traj_path}")
+    if not top_path.exists():
+        raise FileNotFoundError(f"Topology not found: {top_path}")
+    
+    # Load QM trajectory info
+    qm_traj_info = md.load(str(qm_traj_path), top=str(qm_top_path), frame=0)
+    print(f"QM trajectory atoms: {qm_traj_info.n_atoms}")
+    
+    # Create iterators for both trajectories
+    qm_iter = md.iterload(str(qm_traj_path), top=str(qm_top_path), chunk=chunk_size)
+    mm_iter = md.iterload(str(traj_path), top=str(top_path), chunk=chunk_size)
+    
+    frame_counter = 0
+    
+    for qm_chunk, mm_chunk in zip(qm_iter, mm_iter):
+        # Check frame counts match
+        if qm_chunk.n_frames != mm_chunk.n_frames:
+            print(f"Warning: Frame count mismatch at chunk starting at frame {frame_counter}")
+            min_frames = min(qm_chunk.n_frames, mm_chunk.n_frames)
+        else:
+            min_frames = qm_chunk.n_frames
+        
+        # QM coords: nm -> Å -> Bohr (all atoms in QM trajectory)
+        qm_coords_chunk = qm_chunk.xyz[:min_frames, :, :] * ANG_PER_NM * BOHR_PER_ANG
+        # MM coords: nm -> Å (PCcharges.dat uses Angstrom)
+        mm_coords_chunk = mm_chunk.xyz[:min_frames, mm_indices, :] * ANG_PER_NM
+        times = mm_chunk.time[:min_frames] if mm_chunk.time is not None else [None] * min_frames
+        
+        for local_idx in range(min_frames):
+            qm_coords_bohr = np.asarray(qm_coords_chunk[local_idx], dtype=np.float64)
+            mm_coords_ang = np.asarray(mm_coords_chunk[local_idx], dtype=np.float64)
+            time_fs = times[local_idx]
+            yield frame_counter + local_idx, time_fs, qm_coords_bohr, mm_coords_ang
+        
+        frame_counter += min_frames
 
 
 def setup_work_directory(
@@ -295,6 +380,8 @@ def run_dftb_analysis(config_path: str):
     print("=" * 70)
     print(f"Config file: {config_path}")
     print(f"Trajectory: {config.traj_path}")
+    if config.qm_traj_path is not None:
+        print(f"QM Trajectory: {config.qm_traj_path}")
     print(f"Topology: {config.topology_path}")
     print(f"Output directory: {config.output_dir}")
     print("=" * 70)
@@ -335,9 +422,18 @@ def run_dftb_analysis(config_path: str):
     try:
         processed_count = 0
         
-        for frame_id, time_fs, qm_coords_bohr, mm_coords_ang in iter_qm_coordinates(
-            config.traj_path, config.topology_path, qm_indices, mm_indices
-        ):
+        # Choose iterator based on whether separate QM trajectory is provided
+        if config.qm_traj_path is not None:
+            coord_iterator = iter_qm_coordinates_separate(
+                config.qm_traj_path, config.qm_topology_path,
+                config.traj_path, config.topology_path, mm_indices
+            )
+        else:
+            coord_iterator = iter_qm_coordinates(
+                config.traj_path, config.topology_path, qm_indices, mm_indices
+            )
+        
+        for frame_id, time_fs, qm_coords_bohr, mm_coords_ang in coord_iterator:
             # Skip frames before start_frame
             if frame_id < config.start_frame:
                 continue

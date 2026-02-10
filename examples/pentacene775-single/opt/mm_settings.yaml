@@ -1,0 +1,21 @@
+# MM Settings Configuration File
+# Pure force field MD simulation settings
+
+# File paths
+paths:
+  amber_prmtop: "/home/takahashi/python/q4mdkit/examples/pentacene775-single/input/pentacene.prmtop"
+  pdbfile: "/home/takahashi/python/q4mdkit/examples/pentacene775-single/input/pentacene.pdb"
+  boxfile: "/home/takahashi/python/q4mdkit/examples/pentacene775-single/input/pentacene.box"
+
+# Parallel settings
+parallel:
+  numcores: 4
+
+# OpenMM settings
+openmm:
+  periodic: true
+  periodic_nonbonded_cutoff: 9.0
+  use_boxfile: true
+  autoconstraints: HBonds
+  hydrogenmass: 1.0
+  platform: "CPU"

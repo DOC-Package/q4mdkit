@@ -1,0 +1,10 @@
+source leaprc.gaff2
+PIC = loadmol2 picene_gaff2.mol2
+loadamberparams picene.frcmod
+
+X = loadPDB picene.pdb
+check X
+charge X
+
+saveamberparm X picene.prmtop picene.inpcrd
+quit

@@ -80,15 +80,43 @@ def read_pdb_file(pdbfile):
             # Convert to nm
             box = np.array([a / 10.0, b / 10.0, c / 10.0])
         elif line.startswith("ATOM") or line.startswith("HETATM"):
-            # PDB format: columns are fixed width
-            # Residue number: columns 23-26 (1-indexed)
-            # X: columns 31-38, Y: columns 39-46, Z: columns 47-54 (in Angstrom)
-            resnum = int(line[22:26].strip())
-            x = float(line[30:38].strip()) / 10.0  # Convert to nm
-            y = float(line[38:46].strip()) / 10.0
-            z = float(line[46:54].strip()) / 10.0
-            coords.append([x, y, z])
-            residues.append(resnum)
+            # Parse PDB ATOM/HETATM lines
+            # Some PDB files don't follow strict column formatting,
+            # so we use split() for coordinates as a fallback
+            parts = line.split()
+            # parts: [ATOM, serial, name, resname, chain, resnum, x, y, z, occ, temp, ...]
+            # or:    [ATOM, serial, name, resname, resnum, x, y, z, occ, temp, ...] (no chain)
+            try:
+                # Try to find where coordinates start by looking for floats
+                # Typically: ATOM serial name resname [chain] resnum x y z ...
+                # Find index where x coordinate starts (first float with decimal after resnum)
+                coord_start = None
+                for i in range(4, min(8, len(parts))):
+                    try:
+                        val = float(parts[i])
+                        # Check if this looks like a coordinate (has decimal point in original)
+                        if '.' in parts[i]:
+                            coord_start = i
+                            break
+                    except ValueError:
+                        continue
+                
+                if coord_start is None:
+                    continue
+                    
+                x = float(parts[coord_start]) / 10.0  # Convert to nm
+                y = float(parts[coord_start + 1]) / 10.0
+                z = float(parts[coord_start + 2]) / 10.0
+                
+                # Residue number is just before coordinates
+                resnum_idx = coord_start - 1
+                resnum = int(parts[resnum_idx])
+                
+                coords.append([x, y, z])
+                residues.append(resnum)
+            except (ValueError, IndexError) as e:
+                # Skip malformed lines
+                continue
     
     coords = np.array(coords)
     residues = np.array(residues)

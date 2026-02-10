@@ -19,3 +19,8 @@ from .normal_mode_analysis import (
     read_hessian_eigenvectors,
     read_hessian_eigenvalues,
 )
+
+from .dcd2xyz import (
+    convert_dcd_to_xyz,
+    write_xyz,
+)
