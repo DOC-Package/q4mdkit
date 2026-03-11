@@ -1,0 +1,10 @@
+source leaprc.gaff2
+BTB = loadmol2 ph-btbt-c10_gaff2.mol2
+loadamberparams ph-btbt-c10.frcmod
+
+X = loadPDB ph-btbt-c10.pdb
+check X
+charge X
+
+saveamberparm X ph-btbt-c10.prmtop ph-btbt-c10.inpcrd
+quit

@@ -34,8 +34,10 @@ def read_cation_energies(filename):
 
 def main():
     # Read input files
-    neutral_times, neutral_energies = read_neutral_energies('qm_energy_sampled.dat')
-    cation_frames, cation_times, cation_energies = read_cation_energies('energies.dat')
+    #neutral_times, neutral_energies = read_neutral_energies('qm_energy_sampled.dat')
+    #cation_frames, cation_times, cation_energies = read_cation_energies('energies.dat')
+    neutral_times, neutral_energies = read_neutral_energies('energies_cation_wopc.dat')
+    cation_frames, cation_times, cation_energies = read_cation_energies('energies_neutral_wopc.dat')
     
     # Check that the number of data points match
     n_cation = len(cation_energies)
@@ -58,7 +60,7 @@ def main():
     dE_eV = dE_au * HARTREE_TO_EV
     
     # Write output file in the same format as energy_diff_all_pentacene.dat
-    output_file = 'energy_diff.dat'
+    output_file = 'energy_diff_wopc.dat'
     with open(output_file, 'w') as f:
         f.write("# Energy Difference (Cation - Neutral)\n")
         f.write("# Frame  Time(fs)        dE(a.u.)           dE(eV)\n")

@@ -8,13 +8,18 @@ input:
   topology: "traj/pentacene.pdb"      # Topology file (GRO/PDB/etc.)
   qm_atoms: "traj/qmatoms"            # QM atom indices file (0-indexed)
   pccharges_template: "input/PCcharges.dat"    # Point charges template
-  hsd_template: "input/dftb_in.hsd"            # DFTB+ HSD template
+  hsd_template: "input/dftb_in_constraint.hsd"            # DFTB+ HSD template
+  # mm_molecule_indices: "input/nearby_molecules"  # MM molecules for elstat_energy
+  # Format: each line = "mol_id  atom_idx1  atom_idx2  ..."
 
 # Output settings
 output:
-  directory: "output_dftb2"            # Output directory
+  directory: "output_cdftb"            # Output directory
   energy_file: "energies.dat"         # Energy output file
   work_directory: "work"              # Working directory name
+  detailed_energy: true               # Output detailed energy components
+  mulliken_charges: false             # Output Mulliken charges for each frame
+  elstat_energy: false                # Output electrostatic energy with MM molecule
 
 # Frame selection
 frames:

@@ -39,7 +39,7 @@ energy_diff = energy_diff_data[:, 4]
 # Load mode information from mode_coords_stats.txt (cation modes)
 mode_indices_all = []
 mode_freqs_all = []
-with open('mode_coords_new_stats.txt') as f:
+with open('mode_coords_stats.txt') as f:
     for line in f:
         line = line.strip()
         if not line or line.startswith('#'):
@@ -59,7 +59,7 @@ mode_freqs = mode_freqs_all[fit_mask]
 print(f"\nFiltered to {len(mode_indices)} modes with 400 ≤ freq ≤ 1800 cm⁻¹")
 
 # Load mode coordinates from mode_coords_new.txt
-q_k_data = np.loadtxt('mode_coords_new.txt')
+q_k_data = np.loadtxt('mode_coords.txt')
 q_k_all = q_k_data[:, 1:]
 # Get column indices for selected modes (mode index 7 corresponds to column 0)
 mode_col_indices = mode_indices - 7

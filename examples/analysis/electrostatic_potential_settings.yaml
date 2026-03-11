@@ -1,0 +1,29 @@
+# Electrostatic Potential Analysis Settings
+# Computes displacement-induced electrostatic potential fluctuations
+# at QM atoms due to MM point charges.
+
+# Input paths (relative to this config file directory)
+input:
+  trajectory: "traj/nve.dcd"              # Trajectory file (DCD format)
+  topology: "traj/picene.pdb"             # Topology file (PDB)
+  reference: "../normal_mode/opt.gen"        # Reference structure (.gen file)
+  qm_indices: "input/qmatoms"         # QM atom indices file
+  mm_charges: "input/PCcharges.dat"       # MM atom charges file (PCcharges.dat format)
+  #charge_column: -1                       # Column index for charge (-1 = last column)
+                                          # For PCcharges.dat (x y z charge): use -1 or 3
+
+# Output settings
+output:
+  directory: "output_potential"           # Output directory
+  prefix: "potential"                     # Output file prefix
+  save_individual: true                   # Save individual atom potentials (phi, phi_env)
+
+# Frame selection
+frames:
+  start: 0                                # First frame to process (0-indexed)
+  end: null                               # Last frame (null = all)
+  stride: 1                               # Frame stride
+
+# Analysis settings
+analysis:
+  verbose: true                           # Print progress information

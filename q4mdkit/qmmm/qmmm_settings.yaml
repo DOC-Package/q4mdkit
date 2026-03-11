@@ -22,6 +22,7 @@ qm:
 
 # DFTB parameters
 dftb:
+  library_path: null  # Path to DFTB+ binary directory (e.g., /path/to/dftbplus/bin)
   slater_koster_files:
     C-C: "{sk_dir}/C-C.skf"
     C-H: "{sk_dir}/C-H.skf"

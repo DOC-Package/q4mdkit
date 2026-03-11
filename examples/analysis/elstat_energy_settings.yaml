@@ -1,0 +1,41 @@
+# Electrostatic Energy Analysis Configuration
+# Calculate E = Σ_a q_a * Σ_b Q_b / r_ab between QM and MM atoms
+
+input:
+  trajectory: ../traj/qm_traj.dcd
+  topology: ../input/system.pdb
+  
+  # QM atoms
+  qm_indices: ../input/qmatoms
+  qm_charges: qm_charges.dat
+  
+  # MM atoms (specific molecule to analyze)
+  mm_indices: ../input/mm_molecule_indices.dat
+  
+  # MM charges: Choose ONE of the following options:
+  # Option 1: Direct charges file (pre-extracted)
+  # mm_charges: mm_charges.dat
+  
+  # Option 2: Auto-extract from PCcharges.dat (ASH/DFTB output)
+  pccharges_file: ../input/PCcharges.dat
+  
+  # Reference structure for fixing QM (XYZ format, required if fix_qm: true)
+  reference: ../input/qm_ref.xyz
+  
+  # Fix QM molecule (rigid body motion only)
+  fix_qm: false
+  
+  # Column for charges (-1 = last column)
+  charge_column: -1
+
+output:
+  directory: output_elstat_energy
+  prefix: elstat_energy
+
+frames:
+  start: 0
+  end: null      # null = all frames
+  stride: 1
+
+analysis:
+  verbose: true

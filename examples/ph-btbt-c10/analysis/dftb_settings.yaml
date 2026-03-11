@@ -1,0 +1,42 @@
+# DFTB Trajectory Analysis Settings
+# Standard (non-constrained) DFTB calculations along a trajectory.
+# Computes energies for closed-shell systems.
+
+# Input paths (relative to this config file directory)
+input:
+  trajectory: "traj_part01.dcd"         # Trajectory file (DCD format)
+  topology: "../input/ph-btbt-c10.pdb"      # Topology file (GRO/PDB/etc.)
+  qm_atoms: "../input/qmatoms"            # QM atom indices file (0-indexed)
+  pccharges_template: "input/PCcharges.dat"    # Point charges template
+  hsd_template: "input/dftb_in.hsd"            # DFTB+ HSD template
+  mm_molecule_indices: "../input/nearby_molecules"
+
+# Output settings
+output:
+  directory: "frozen"            # Output directory
+  energy_file: "energies_frozen_neutral.dat"         # Energy output file
+  work_directory: "work"              # Working directory name
+  detailed_energy: true
+  elstat_energy: true
+
+fixed_geometry:
+  enabled: true
+  structure_file: "../frozen/mol_average.xyz"  # Structure to use for fixed geometry calculations
+
+# Frame selection
+frames:
+  start: 0                            # First frame to process (0-indexed)
+  n_frames: null                        # Number of frames (null = all)
+  t0_fs: 0.0                          # Initial time (fs)
+  dt_fs: 4.0                          # Time step (fs) between frames
+
+# DFTB+ settings
+dftb:
+  library_path: "/home/takahashi/opt/dftb+/lib/libdftbplus.so"
+  num_threads: 16                      # Number of CPU threads (null = use system default)
+  timeout: 600                        # Timeout per calculation (seconds)
+
+# SCC settings
+scc:
+  # Use charges from previous frame as initial guess for faster convergence
+  use_previous_charges: false

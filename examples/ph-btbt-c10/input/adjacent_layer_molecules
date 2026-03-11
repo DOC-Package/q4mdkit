@@ -1,0 +1,15 @@
+# Adjacent layer molecules for QM molecule 76 (z ≈ 50 Å)
+# Sorted by minimum atom-atom distance
+# Format: molecule_id start_index end_index min_dist_Å
+
+# Layer z ≈ 25 (below QM)
+150 9600 9663 2.58
+86 5504 5567 2.72
+112 7168 7231 3.04
+114 7296 7359 3.05
+
+# Layer z ≈ 75 (above QM)
+30 1920 1983 2.65
+161 10304 10367 2.82
+2 128 191 3.16
+3 192 255 3.16

@@ -15,8 +15,9 @@ import mdtraj as md
 from pathlib import Path
 import shutil
 import yaml
+import re
 from dataclasses import dataclass
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
 # Import utility functions from cdftb module
 from .cdftb import (
@@ -28,6 +29,11 @@ from .cdftb import (
     iter_qm_coordinates,
     extract_atom_types_from_hsd,
     save_qm_coords_xyz,
+)
+from .electrostatic_energy import (
+    COULOMB_CONSTANT_EV_ANGSTROM,
+    read_index_file,
+    read_structure_file,
 )
 import dftbplus
 import multiprocessing as mp
@@ -66,6 +72,18 @@ class DFTBConfig:
     
     # SCC settings
     use_previous_charges: bool = False
+    
+    # Output settings
+    output_detailed_energy: bool = False  # Output Electronic, Repulsive, Total, PointCharges
+    output_mulliken_charges: bool = False  # Output Mulliken charges for each atom
+    
+    # Fixed geometry mode: only vary point charges, keep QM geometry fixed
+    fixed_geometry: bool = False
+    fixed_geometry_file: Optional[Path] = None  # Path to fixed QM structure (xyz/gen)
+    
+    # Electrostatic energy calculation with specific MM molecule
+    output_elstat_energy: bool = False  # Compute E_elstat = Σ q_a * Σ Q_b / r_ab
+    mm_molecule_indices_file: Optional[Path] = None  # Indices of target MM molecule (system indices)
 
 
 
@@ -129,6 +147,25 @@ def load_dftb_config(config_path: Path) -> DFTBConfig:
     scc_cfg = data.get('scc', {})
     use_previous_charges = scc_cfg.get('use_previous_charges', False)
     
+    # Output detail settings
+    output_detailed_energy = output_cfg.get('detailed_energy', False)
+    output_mulliken_charges = output_cfg.get('mulliken_charges', False)
+    
+    # Fixed geometry mode settings
+    fixed_cfg = data.get('fixed_geometry', {})
+    fixed_geometry = fixed_cfg.get('enabled', False)
+    fixed_geometry_file = None
+    if fixed_geometry and 'structure_file' in fixed_cfg:
+        fixed_geometry_file = base_dir / fixed_cfg['structure_file']
+    
+    # Electrostatic energy settings
+    output_elstat_energy = output_cfg.get('elstat_energy', False)
+    mm_molecule_indices_file = None
+    if output_elstat_energy:
+        if 'mm_molecule_indices' not in input_cfg:
+            raise ValueError("mm_molecule_indices required when output.elstat_energy=true")
+        mm_molecule_indices_file = base_dir / input_cfg['mm_molecule_indices']
+    
     return DFTBConfig(
         traj_path=traj_path,
         topology_path=topology_path,
@@ -148,6 +185,12 @@ def load_dftb_config(config_path: Path) -> DFTBConfig:
         num_threads=num_threads,
         timeout=timeout,
         use_previous_charges=use_previous_charges,
+        output_detailed_energy=output_detailed_energy,
+        output_mulliken_charges=output_mulliken_charges,
+        fixed_geometry=fixed_geometry,
+        fixed_geometry_file=fixed_geometry_file,
+        output_elstat_energy=output_elstat_energy,
+        mm_molecule_indices_file=mm_molecule_indices_file,
     )
 
 
@@ -363,6 +406,186 @@ def run_dftb_in_subprocess(qm_coords_bohr, work_dir,
         return None, None, energy_or_error
 
 
+def read_detailed_energy(detailed_path):
+    """
+    Read energy components from DFTB+ detailed.out file.
+    
+    Args:
+        detailed_path: Path to detailed.out file.
+    
+    Returns:
+        dict: {'electronic': float, 'repulsive': float, 'total': float, 'point_charges': float}
+              or None if not found.
+    """
+    p = Path(detailed_path)
+    if not p.exists():
+        return None
+    txt = p.read_text(errors="ignore")
+    
+    # Parse energy lines from detailed.out (Hartree only)
+    pat_elec = re.compile(r"Total Electronic energy:\s+([-+]?\d+\.\d+)\s+H")
+    pat_rep = re.compile(r"Repulsive energy:\s+([-+]?\d+\.\d+)\s+H")
+    pat_pc = re.compile(r"Energy point charges:\s+([-+]?\d+\.\d+)\s+H")
+    pat_total = re.compile(r"Total energy:\s+([-+]?\d+\.\d+)\s+H")
+    
+    m_elec = pat_elec.search(txt)
+    m_rep = pat_rep.search(txt)
+    m_pc = pat_pc.search(txt)
+    m_total = pat_total.search(txt)
+    
+    if not (m_elec and m_rep and m_total):
+        return None
+    
+    return {
+        'electronic': float(m_elec.group(1)),
+        'repulsive': float(m_rep.group(1)),
+        'total': float(m_total.group(1)),
+        'point_charges': float(m_pc.group(1)) if m_pc else 0.0,
+    }
+
+
+def load_fixed_geometry(filepath: Path) -> np.ndarray:
+    """
+    Load fixed QM geometry from XYZ or GEN file.
+    
+    Parameters
+    ----------
+    filepath : Path
+        Path to structure file (.xyz or .gen format)
+    
+    Returns
+    -------
+    coords_bohr : np.ndarray
+        Atomic coordinates in Bohr (N, 3)
+    """
+    coords_bohr, _ = read_structure_file(str(filepath), output_unit="bohr")
+    return coords_bohr
+
+
+def compute_mm_molecule_elstat_energy(
+    qm_coords_ang: np.ndarray,
+    qm_charges: np.ndarray,
+    mm_coords_ang: np.ndarray,
+    mm_charges: np.ndarray,
+    mm_molecule_pc_indices: np.ndarray,
+) -> float:
+    """
+    Compute electrostatic energy between QM atoms and a specific MM molecule.
+    
+    E = Σ_a q_a * Σ_b Q_b / r_ab
+    
+    Parameters
+    ----------
+    qm_coords_ang : np.ndarray
+        QM atom coordinates in Angstrom (n_qm, 3)
+    qm_charges : np.ndarray
+        Mulliken charges of QM atoms (n_qm,)
+    mm_coords_ang : np.ndarray
+        All MM atom coordinates in Angstrom (n_mm, 3)
+    mm_charges : np.ndarray
+        All MM atom charges (n_mm,)
+    mm_molecule_pc_indices : np.ndarray
+        Indices of target MM molecule in PCcharges order (subset of 0..n_mm-1)
+    
+    Returns
+    -------
+    energy_ev : float
+        Electrostatic interaction energy in eV
+    """
+    # Extract target MM molecule coords and charges
+    mol_coords = mm_coords_ang[mm_molecule_pc_indices]  # (n_mol, 3)
+    mol_charges = mm_charges[mm_molecule_pc_indices]    # (n_mol,)
+    
+    # Compute pairwise distances (n_qm, n_mol)
+    diff = qm_coords_ang[:, np.newaxis, :] - mol_coords[np.newaxis, :, :]  # (n_qm, n_mol, 3)
+    distances = np.linalg.norm(diff, axis=2)  # (n_qm, n_mol)
+    
+    # E = Σ_a q_a * Σ_b Q_b / r_ab
+    # Note: we sum over all qm-mm pairs
+    energy_ev = COULOMB_CONSTANT_EV_ANGSTROM * np.sum(
+        qm_charges[:, np.newaxis] * mol_charges[np.newaxis, :] / distances
+    )
+    
+    return energy_ev
+
+
+def map_system_indices_to_pccharges(
+    system_indices: np.ndarray,
+    qm_indices: np.ndarray,
+) -> np.ndarray:
+    """
+    Map system-wide atom indices to PCcharges.dat row indices.
+    
+    PCcharges.dat contains only MM atoms, so we need to subtract
+    the number of QM atoms that come before each MM atom in the system.
+    
+    Parameters
+    ----------
+    system_indices : np.ndarray
+        System-wide atom indices (0-based)
+    qm_indices : np.ndarray
+        QM atom indices in system
+    
+    Returns
+    -------
+    pc_indices : np.ndarray
+        Corresponding row indices in PCcharges.dat
+    """
+    qm_set = set(qm_indices)
+    pc_indices = []
+    
+    for sys_idx in system_indices:
+        if sys_idx in qm_set:
+            raise ValueError(f"System index {sys_idx} is a QM atom, not MM")
+        # Count how many QM atoms are before this system index
+        n_qm_before = np.sum(qm_indices < sys_idx)
+        pc_idx = sys_idx - n_qm_before
+        pc_indices.append(pc_idx)
+    
+    return np.array(pc_indices, dtype=np.int32)
+
+
+def read_nearby_molecules_file(
+    filename: str,
+    qm_indices: np.ndarray,
+) -> List[Tuple[int, np.ndarray]]:
+    """
+    Read nearby_molecules file format.
+    
+    Format: each line is one MM molecule
+        mol_id  atom_idx1  atom_idx2  ...  atom_idxN
+    
+    Parameters
+    ----------
+    filename : str
+        Path to nearby_molecules file
+    qm_indices : np.ndarray
+        QM atom indices (for mapping to PCcharges)
+    
+    Returns
+    -------
+    molecules : list of (mol_id, pc_indices)
+        List of tuples containing molecule ID and PCcharges indices
+    """
+    molecules = []
+    
+    with open(filename, 'r') as f:
+        for line in f:
+            line = line.strip()
+            if not line or line.startswith('#'):
+                continue
+            
+            parts = line.split()
+            mol_id = int(parts[0])
+            atom_indices = np.array([int(x) for x in parts[1:]], dtype=np.int32)
+            
+            # Map to PCcharges indices
+            pc_indices = map_system_indices_to_pccharges(atom_indices, qm_indices)
+            molecules.append((mol_id, pc_indices))
+    
+    return molecules
+
+
 def run_dftb_analysis(config_path: str):
     """
     Run standard DFTB analysis on trajectory frames.
@@ -406,6 +629,28 @@ def run_dftb_analysis(config_path: str):
     if config.use_previous_charges:
         print(f"\nSCC settings:")
         print(f"  Use previous charges: Yes")
+    
+    # Fixed geometry mode
+    fixed_qm_coords_bohr = None
+    if config.fixed_geometry:
+        print(f"\nFixed geometry mode: ENABLED")
+        if config.fixed_geometry_file is not None:
+            print(f"  Structure file: {config.fixed_geometry_file}")
+            fixed_qm_coords_bohr = load_fixed_geometry(config.fixed_geometry_file)
+        else:
+            print(f"  Using first frame as fixed structure")
+        print(f"  Only point charges will vary along trajectory")
+    
+    # Load MM molecule indices for electrostatic energy calculation
+    mm_molecules = None
+    if config.output_elstat_energy:
+        mm_molecules = read_nearby_molecules_file(
+            str(config.mm_molecule_indices_file), qm_indices
+        )
+        print(f"\nElectrostatic energy calculation: ENABLED")
+        print(f"  Number of MM molecules: {len(mm_molecules)}")
+        for mol_id, pc_indices in mm_molecules:
+            print(f"    Molecule {mol_id}: {len(pc_indices)} atoms")
     print()
     
     # Create output directory
@@ -417,7 +662,32 @@ def run_dftb_analysis(config_path: str):
     # Open output file
     energy_file = open(config.energy_file, "w")
     energy_file.write("# DFTB Trajectory Analysis (Closed-shell, Non-constrained)\n")
-    energy_file.write("# Frame  Time(fs)        Energy(a.u.)\n")
+    if config.output_detailed_energy:
+        energy_file.write("# Frame  Time(fs)        Electronic(a.u.)      Repulsive(a.u.)       Total(a.u.)           PointCharges(a.u.)\n")
+    else:
+        energy_file.write("# Frame  Time(fs)        Energy(a.u.)\n")
+    
+    # Open Mulliken charges file if requested
+    mulliken_file = None
+    if config.output_mulliken_charges:
+        mulliken_path = config.output_dir / "mulliken_charges.dat"
+        mulliken_file = open(mulliken_path, "w")
+        mulliken_file.write("# Mulliken charges for each frame\n")
+        mulliken_file.write(f"# Atom types: {' '.join(atom_types)}\n")
+        mulliken_file.write(f"# Columns: Frame, Time(fs), Q_1, Q_2, ..., Q_N\n")
+        mulliken_file.write(f"# Units: elementary charge (e)\n")
+    
+    # Open electrostatic energy file if requested
+    elstat_file = None
+    if config.output_elstat_energy:
+        elstat_path = config.output_dir / "elstat_energy.dat"
+        elstat_file = open(elstat_path, "w")
+        elstat_file.write("# Electrostatic energy between QM and MM molecules\n")
+        elstat_file.write("# E = Σ_a q_a * Σ_b Q_b / r_ab (using Mulliken charges)\n")
+        mol_ids = [mol_id for mol_id, _ in mm_molecules]
+        elstat_file.write(f"# Molecule IDs: {' '.join(str(m) for m in mol_ids)}\n")
+        header = "# Frame  Time(fs)        " + "  ".join(f"E_mol{mol_id:03d}(eV)" for mol_id in mol_ids) + "\n"
+        elstat_file.write(header)
     
     try:
         processed_count = 0
@@ -441,6 +711,14 @@ def run_dftb_analysis(config_path: str):
             # Stop if we've processed enough frames
             if config.n_frames is not None and processed_count >= config.n_frames:
                 break
+            
+            # Fixed geometry mode: use fixed QM structure
+            if config.fixed_geometry:
+                if fixed_qm_coords_bohr is None:
+                    # Use first frame as fixed structure
+                    fixed_qm_coords_bohr = qm_coords_bohr.copy()
+                    print(f"  Using frame {frame_id} as fixed QM structure")
+                qm_coords_bohr = fixed_qm_coords_bohr
             
             # Convert QM coords to Angstrom
             qm_coords_ang = qm_coords_bohr / BOHR_PER_ANG
@@ -476,20 +754,68 @@ def run_dftb_analysis(config_path: str):
             if error:
                 print(f"  ERROR: {error}")
                 energy = float("nan")
+                mcharge = None
+                detailed_energies = None
             else:
                 print(f"  E = {energy:.10f} a.u.")
+                # Read detailed energies if requested
+                if config.output_detailed_energy:
+                    detailed_energies = read_detailed_energy(work_dir / "detailed.out")
+                else:
+                    detailed_energies = None
             
             # Save results
-            energy_file.write(f"{frame_id:5d}  {time_val:12.3f}  {energy:18.10f}\n")
+            if config.output_detailed_energy and detailed_energies is not None:
+                energy_file.write(f"{frame_id:5d}  {time_val:12.3f}  {detailed_energies['electronic']:18.10f}  {detailed_energies['repulsive']:18.10f}  {detailed_energies['total']:18.10f}  {detailed_energies['point_charges']:18.10f}\n")
+            else:
+                energy_file.write(f"{frame_id:5d}  {time_val:12.3f}  {energy:18.10f}\n")
             energy_file.flush()
+            
+            # Save Mulliken charges if requested
+            if config.output_mulliken_charges and mulliken_file is not None:
+                if mcharge is not None:
+                    charges_str = "  ".join(f"{q:12.8f}" for q in mcharge)
+                    mulliken_file.write(f"{frame_id:5d}  {time_val:12.3f}  {charges_str}\n")
+                else:
+                    # Write NaN for error frames
+                    nan_str = "  ".join("         nan" for _ in atom_types)
+                    mulliken_file.write(f"{frame_id:5d}  {time_val:12.3f}  {nan_str}\n")
+                mulliken_file.flush()
+            
+            # Save electrostatic energy if requested
+            if config.output_elstat_energy and elstat_file is not None:
+                if mcharge is not None:
+                    energies = []
+                    for mol_id, pc_indices in mm_molecules:
+                        e = compute_mm_molecule_elstat_energy(
+                            qm_coords_ang, mcharge, mm_coords_ang, mm_charges,
+                            pc_indices
+                        )
+                        energies.append(e)
+                    energies_str = "  ".join(f"{e:18.10f}" for e in energies)
+                    elstat_file.write(f"{frame_id:5d}  {time_val:12.3f}  {energies_str}\n")
+                    total_e = sum(energies)
+                    print(f"  E_elstat = {total_e:.6f} eV (total of {len(mm_molecules)} molecules)")
+                else:
+                    nan_str = "  ".join("               nan" for _ in mm_molecules)
+                    elstat_file.write(f"{frame_id:5d}  {time_val:12.3f}  {nan_str}\n")
+                elstat_file.flush()
             
             processed_count += 1
     
     finally:
         energy_file.close()
+        if mulliken_file is not None:
+            mulliken_file.close()
+        if elstat_file is not None:
+            elstat_file.close()
     
     print("\n" + "=" * 70)
     print(f"Energies saved to {config.energy_file}")
+    if config.output_mulliken_charges:
+        print(f"Mulliken charges saved to {config.output_dir / 'mulliken_charges.dat'}")
+    if config.output_elstat_energy:
+        print(f"Electrostatic energy saved to {config.output_dir / 'elstat_energy.dat'}")
     print("=" * 70)
 
 

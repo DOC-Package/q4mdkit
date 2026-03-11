@@ -1,0 +1,33 @@
+# Electrostatic Potential Analysis Settings
+# Computes displacement-induced electrostatic potential fluctuations
+# at QM atoms due to MM point charges:
+#
+#   φ_a^disp(t) = φ_a(t) - φ_a^env(t)
+#
+# where φ_a(t) is the potential at QM atom a from MM charges,
+# and φ_a^env(t) is the "envelope" potential (rigid body motion only).
+
+# Input paths (relative to this config file directory)
+input:
+  trajectory: "traj/nve.dcd"              # Trajectory file (DCD format)
+  topology: "traj/pentacene.pdb"          # Topology file (PDB)
+  reference: "traj/normal_mode/opt.gen"   # Reference structure (.gen file)
+  qm_indices: "traj/qmatoms"              # QM atom indices file (0 or 1-indexed)
+  mm_charges: "input/PCcharges.dat"       # MM atom charges file
+  # charge_column: -1                     # Column for charge (-1 = last column)
+
+# Output settings
+output:
+  directory: "output_potential"           # Output directory
+  prefix: "potential"                     # Output file prefix
+  save_individual: true                   # Save individual atom potentials
+
+# Frame selection
+frames:
+  start: 0                                # First frame (0-indexed)
+  end: null                               # Last frame (null = all)
+  stride: 1                               # Frame stride
+
+# Analysis settings
+analysis:
+  verbose: true                           # Print progress information

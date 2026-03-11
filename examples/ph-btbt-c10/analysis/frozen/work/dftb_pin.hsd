@@ -1,0 +1,173 @@
+Geometry = xyzFormat {
+64
+frame=999 time_fs=999.000000
+S        17.2279488937        26.2996776252        35.6012482485
+C        16.1314484097        25.6536969291        36.8275426715
+C        16.2588653497        25.6256939423        34.3135028544
+C        16.1014464238        25.6730799200        38.1748360376
+C        15.0889729002        24.9603302554        36.2257709547
+C        16.5237982250        25.7243378959        32.9229045088
+C        15.1304708806        24.9248122721        34.7848386327
+C        16.9844990083        26.2582176447        39.1776315657
+C        14.9816399507        24.9590792560        38.7331247749
+S        14.0018374117        24.2987055667        37.4384433841
+C        15.6623056304        25.0933261928        31.9597189620
+H        17.3934398159        26.2535196469        32.5442546869
+C        14.2630392888        24.3191415571        33.8149640890
+C        16.7558271159        26.1107437141        40.5523909188
+H        17.8363946074        26.8077113861        38.7754787549
+C        14.7600300550        24.8099703261        40.0466811568
+C        14.5343901611        24.4058415163        32.4920157115
+C        15.9466964966        25.1263311773        30.5638896187
+H        13.3989096954        23.7852218083        34.2061799049
+C        15.6579806324        25.3822890569        41.0186576995
+H        17.4403837938        26.5515185067        41.2241476028
+H        13.9191064506        24.2444195923        40.4661979594
+H        13.8605044782        23.9419247346        31.8024790360
+C        16.6417441695        26.1851076791        29.9611309024
+C        15.5399476880        24.0915256642        29.7047360230
+C        15.5096557022        25.1592821618        42.4920110062
+C        16.9131430418        26.1947626746        28.5933055460
+H        16.9481450254        27.0032962941        30.5623956195
+C        15.8222145552        24.0995406604        28.3402896650
+H        15.0383559240        23.2551620577        30.1223138265
+C        14.2040953165        25.6030309530        43.1152907129
+H        15.6229496489        24.1265926477        42.6651029248
+H        16.3013553297        25.6444639335        43.0319737521
+C        16.5085452322        25.1522921651        27.7790679291
+H        17.4236008017        27.0171302876        28.1486777552
+H        15.5196536975        23.2824940449        27.7248669546
+C        14.0575633855        25.1762461538        44.4932690645
+H        14.1231933546        26.6414474644        43.0385727490
+H        13.4095246904        25.2152821354        42.5361969854
+H        16.7240221308        25.1575431626        26.7198624275
+C        12.7562849978        25.5476409790        45.1658337481
+H        14.8390550178        25.5798299639        45.0648627956
+H        14.1744313305        24.1451626390        44.5982300152
+C        12.6138130648        25.0528862118        46.6511470492
+H        12.6542910458        26.5722874969        45.1952877342
+H        11.9742183658        25.1797711521        44.6356369976
+C        11.3446936620        25.4354700318        47.3769727077
+H        13.4108756898        25.3922820521        47.1667948066
+H        12.6901860289        24.0313076925        46.6244320618
+C        11.2179077216        24.9366452665        48.7349130687
+H        11.2676806982        26.4507815541        47.3428047238
+H        10.5483720367        25.0964221914        46.8182529706
+H        12.0154363464        25.2600051144        49.2772058136
+H        11.2830006910        23.9318967393        48.7286220717
+C         9.9755933062        25.3198920862        49.4407227366
+C         9.8409973695        24.8302933166        50.8442750762
+H         9.9123533359        26.3078756213        49.4830167167
+H         9.1890006763        25.0078922330        48.9454119697
+H        10.5714450258        25.1343761735        51.3416198422
+C         8.6643649231        25.1490361666        51.6052997181
+H         9.9199053324        23.8987617549        50.8477010746
+H         8.3438660740        25.1446261687        51.8127886205
+H         8.3495580713        25.2574151156        51.6901076782
+H         8.4020810466        25.2837021032        51.8271396137
+}
+Hamiltonian = DFTB {
+  ElectricField = PointCharges {
+    GaussianBlurWidth [Angstrom] = 0.0
+    CoordsAndCharges [Angstrom] = DirectRead {
+      Records = 18368
+      File = PCcharges.dat
+    }
+  }
+  HCorrection = Damping {
+    Exponent = 4.0
+  }
+  Scc = Yes
+  MaxSCCIterations = 300
+  ThirdOrderFull = Yes
+  ThirdOrder = No
+  HubbardDerivs = {
+    H = -0.1857
+    C = -0.1492
+    S = -0.11
+  }
+  SlaterKosterFiles = {
+    C-C = '/home/takahashi/qmmm/sk/3ob/C-C.skf'
+    C-H = '/home/takahashi/qmmm/sk/3ob/C-H.skf'
+    H-C = '/home/takahashi/qmmm/sk/3ob/H-C.skf'
+    H-H = '/home/takahashi/qmmm/sk/3ob/H-H.skf'
+    S-S = '/home/takahashi/qmmm/sk/3ob/S-S.skf'
+    S-C = '/home/takahashi/qmmm/sk/3ob/S-C.skf'
+    C-S = '/home/takahashi/qmmm/sk/3ob/C-S.skf'
+    S-H = '/home/takahashi/qmmm/sk/3ob/S-H.skf'
+    H-S = '/home/takahashi/qmmm/sk/3ob/H-S.skf'
+    Prefix = ""
+  }
+  MaxAngularMomentum = {
+    S = "d"
+    C = "p"
+    H = "s"
+  }
+  PolynomialRepulsive = {}
+  Hybrid = None {}
+  ShellResolvedSCC = No
+  OldSKInterpolation = No
+  ReadInitialCharges = No
+  InitialCharges = {}
+  SCCTolerance = 1.0000000000000001E-005
+  ConvergentSCCOnly = Yes
+  SpinPolarisation = {}
+  Solver = RelativelyRobust {}
+  Charge = 0.0000000000000000
+  OnSiteCorrection = {}
+  Dispersion = {}
+  Solvation = {}
+  ElectronicConstraints = {}
+  Electrostatics = GammaFunctional {}
+  Mdftb = None {}
+  Differentiation = FiniteDiff {
+    Delta = 1.2207031250000000E-004
+  }
+  ForceEvaluation = "Traditional"
+  Mixer = Broyden {
+    MixingParameter = 0.20000000000000001
+    InverseJacobiWeight = 1.0000000000000000E-002
+    MinimalWeight = 1.0000000000000000
+    MaximalWeight = 100000.00000000000
+    WeightFactor = 1.0000000000000000E-002
+  }
+  Filling = Fermi {
+    Temperature = 0.0000000000000000
+  }
+}
+Options = {
+  WriteDetailedOut = Yes
+  WriteAutotestTag = No
+  WriteDetailedXML = No
+  WriteResultsTag = No
+  RestartFrequency = 20
+  RandomSeed = 0
+  WriteHS = No
+  WriteRealHS = No
+  MinimiseMemoryUsage = No
+  ShowFoldedCoords = No
+  TimingVerbosity = 1
+  WriteCharges = Yes
+  WriteChargesAsText = No
+  BinaryAccessTypes = {
+ "stream"
+  }
+}
+ParserOptions = {
+  ParserVersion = 14
+  WriteHSDInput = Yes
+  StopAfterParsing = No
+  IgnoreUnprocessedNodes = No
+}
+Analysis = {
+  PrintForces = Yes
+  ProjectStates = {}
+  WriteEigenvectors = No
+  WriteBandOut = Yes
+  MullikenAnalysis = Yes
+  WriteNetCharges = No
+  AtomResolvedEnergies = No
+}
+Reks = None {}
+Driver = {}
+ExcitedState = {}

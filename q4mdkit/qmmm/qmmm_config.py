@@ -47,7 +47,7 @@ class DFTBTheory_LogSCC:
         # Overwrite log files at start of each run
         self._log.write_text("# call_index  iSCC  SCC_error(a.u.)\n")
         if self._energy_log:
-            self._energy_logfile.write_text("# call_index  Electronic(H)         Repulsive(H)          Total(H)\n")
+            self._energy_logfile.write_text("# call_index  Electronic(H)         Repulsive(H)          Total(H)              PointCharges(H)\n")
     
     def __getattr__(self, name):
         """Delegate attribute access to wrapped DFTBTheory."""
@@ -90,7 +90,7 @@ class DFTBTheory_LogSCC:
             detailed: Path to detailed.out file.
         
         Returns:
-            tuple: (electronic_energy, repulsive_energy, total_energy) in Hartree,
+            tuple: (electronic_energy, repulsive_energy, point_charges_energy, total_energy) in Hartree,
                    or None if not found.
         """
         p = Path(detailed)
@@ -101,14 +101,17 @@ class DFTBTheory_LogSCC:
         # Parse energy lines from detailed.out (Hartree only)
         # Format: "Total Electronic energy:           -87.4133454695 H        -2378.6382 eV"
         # Format: "Repulsive energy:                    2.0023495898 H           54.4867 eV"
+        # Format: "Energy point charges:                0.1234567890 H            3.3600 eV"
         # Format: "Total energy:                      -85.4109958798 H        -2324.1514 eV"
         
         pat_elec = re.compile(r"Total Electronic energy:\s+([-+]?\d+\.\d+)\s+H")
         pat_rep = re.compile(r"Repulsive energy:\s+([-+]?\d+\.\d+)\s+H")
+        pat_pc = re.compile(r"Energy point charges:\s+([-+]?\d+\.\d+)\s+H")
         pat_total = re.compile(r"Total energy:\s+([-+]?\d+\.\d+)\s+H")
         
         m_elec = pat_elec.search(txt)
         m_rep = pat_rep.search(txt)
+        m_pc = pat_pc.search(txt)
         m_total = pat_total.search(txt)
         
         if not (m_elec and m_rep and m_total):
@@ -116,8 +119,9 @@ class DFTBTheory_LogSCC:
         
         elec = float(m_elec.group(1))
         rep = float(m_rep.group(1))
+        pc = float(m_pc.group(1)) if m_pc else 0.0  # Point charges may not be present in non-QM/MM
         total = float(m_total.group(1))
-        return elec, rep, total
+        return elec, rep, pc, total
     
     def run(self, *args, **kwargs):
         """
@@ -144,9 +148,9 @@ class DFTBTheory_LogSCC:
             if self._energy_log:
                 energy_info = self._read_energy_from_detailed("detailed.out")
                 if energy_info is not None:
-                    elec, rep, total = energy_info
+                    elec, rep, pc, total = energy_info
                     with self._energy_logfile.open("a") as f:
-                        f.write(f"{self._callidx:8d}  {elec:20.10f}  {rep:20.10f}  {total:20.10f}\n")
+                        f.write(f"{self._callidx:8d}  {elec:20.10f}  {rep:20.10f}  {total:20.10f}  {pc:20.10f}\n")
             
             # Keep detailed.out if requested
             if self._keep_detailed:
@@ -206,6 +210,7 @@ class QMMMConfig:
         
         # DFTB settings
         dftb = config.get('dftb', {})
+        self.dftb_library_path = dftb.get('library_path', None)
         sk_files = dftb.get('slater_koster_files', {})
         self.slater_koster_files = {
             k: v.format(sk_dir=self.sk_dir) for k, v in sk_files.items()
@@ -394,17 +399,26 @@ class QMMMConfig:
         Returns:
             DFTBTheory or DFTBTheory_LogSCC: Configured DFTB theory object.
         """
+        # Build common DFTB parameters
+        dftb_kwargs = {
+            "hamiltonian": "DFTB",
+            "SCC": True,
+            "ThirdOrderFull": self.third_order_full,
+            "slaterkoster_dict": self.slater_koster_files,
+            "hubbard_derivs_dict": self.hubbard_derivs,
+            "hcorrection_zeta": self.hcorrection_zeta,
+            "MaxSCCIterations": self.max_scc_iterations,
+            "numcores": self.numcores_qm,
+            "printlevel": 2
+        }
+        
+        # Only add dftbplusdir if library_path is specified
+        if self.dftb_library_path is not None:
+            dftb_kwargs["dftbplusdir"] = self.dftb_library_path
+        
         if self.scc_log:
             return DFTBTheory_LogSCC(
-                hamiltonian="DFTB",
-                SCC=True,
-                ThirdOrderFull=self.third_order_full,
-                slaterkoster_dict=self.slater_koster_files,
-                hubbard_derivs_dict=self.hubbard_derivs,
-                hcorrection_zeta=self.hcorrection_zeta,
-                MaxSCCIterations=self.max_scc_iterations,
-                numcores=self.numcores_qm,
-                printlevel=2,
+                **dftb_kwargs,
                 scc_logfile=self.scc_logfile,
                 keep_detailed=self.keep_detailed,
                 output_dir="output",
@@ -413,17 +427,7 @@ class QMMMConfig:
             )
         else:
             from ash import DFTBTheory
-            return DFTBTheory(
-                hamiltonian="DFTB",
-                SCC=True,
-                ThirdOrderFull=self.third_order_full,
-                slaterkoster_dict=self.slater_koster_files,
-                hubbard_derivs_dict=self.hubbard_derivs,
-                hcorrection_zeta=self.hcorrection_zeta,
-                MaxSCCIterations=self.max_scc_iterations,
-                numcores=self.numcores_qm,
-                printlevel=2
-            )
+            return DFTBTheory(**dftb_kwargs)
     
     def create_qmmm_theory(self, frag, qmatoms, omm=None, qm_dftb=None):
         """

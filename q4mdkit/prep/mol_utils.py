@@ -12,7 +12,7 @@ def build_graph(atoms: Atoms, scale: float = 1.10) -> nx.Graph:
     """
     Z = atoms.get_atomic_numbers()
     cutoffs = [covalent_radii[z] * scale for z in Z]
-    nl = NeighborList(cutoffs, self_interaction=False, bothways=True)
+    nl = NeighborList(cutoffs, self_interaction=False, bothways=True, skin=0.0)
     nl.update(atoms)
 
     G = nx.Graph()
