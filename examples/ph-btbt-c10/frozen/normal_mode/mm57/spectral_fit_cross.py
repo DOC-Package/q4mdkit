@@ -554,7 +554,7 @@ ax.grid(True, alpha=0.3, axis='y')
 ax.tick_params(axis='both', labelsize=16)
 
 # Add frequency labels on top
-for i, idx in enumerate(sort_idx[:min(10, len(sort_idx))]):
+for i, idx in enumerate(sort_idx[:min(20, len(sort_idx))]):
     ax.text(i, g_sq[idx], f'{mode_freqs[idx]:.0f}', 
             ha='center', va='bottom', fontsize=12, rotation=45)
 

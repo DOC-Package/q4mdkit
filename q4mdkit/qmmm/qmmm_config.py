@@ -457,6 +457,9 @@ class QMMMConfig:
             embedding="elstat",
             qm_charge=self.qm_charge,
             qm_mult=self.qm_mult,
+            unusualboundary=True,
+            #TruncatedPC=True,
+            #TruncPCRadius=15.0,  # Use smaller radius for solvated systems
             printlevel=2
         )
     

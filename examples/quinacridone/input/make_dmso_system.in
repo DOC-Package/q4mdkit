@@ -1,0 +1,21 @@
+source leaprc.gaff2
+
+# Solute
+QUC = loadmol2 ../quinacridone_gaff2.mol2
+loadamberparams ../quinacridone_gaff2.frcmod
+
+# Solvent
+DMS = loadmol2 ../../solvent/dmso/dmso_gaff2.mol2
+loadamberparams ../../solvent/dmso/dmso_gaff2.frcmod
+
+# System
+SYS = loadpdb quinacridone_dmso.pdb
+
+# Box
+set SYS box {34.8 34.8 34.8}
+
+check SYS
+
+saveAmberParm SYS quinacridone_dmso.prmtop quinacridone_dmso.inpcrd
+savePDB SYS quinacridone_dmso_leap.pdb
+quit

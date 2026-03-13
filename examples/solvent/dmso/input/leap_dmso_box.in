@@ -1,0 +1,13 @@
+source leaprc.gaff2
+
+DMS = loadmol2 dmso_gaff2.mol2
+loadamberparams dmso_gaff2.frcmod
+check DMS
+
+BOX = loadpdb dmso_box_raw.pdb
+
+set BOX box {40.0 40.0 40.0}
+
+saveAmberParm BOX dmso_box_raw.prmtop dmso_box_raw.inpcrd
+savePDB BOX dmso_box_raw_leap.pdb
+quit
