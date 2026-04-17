@@ -1,0 +1,74 @@
+Geometry = xyzFormat {
+72
+title
+C     23.366234285638  38.240430041308  35.119001470715
+C     22.327023528023  38.277125618581  36.082016876846
+}
+
+Hamiltonian = DFTB {
+  Scc = Yes
+  SccTolerance = 1e-5
+  MaxSccIterations = 300
+  
+  # Long-range correction for LC-TD-DFTB
+  RangeSeparated = LC {
+    Screening = MatrixBased {}
+  }
+  
+  HCorrection = Damping {
+    Exponent = 4.0
+  }
+  
+  # ob2 parameter set required for LC-DFTB
+  SlaterKosterFiles = Type2FileNames {
+    Prefix = "/home/takahashi/qmmm/sk/ob2-1-1/base/"
+    Separator = "-"
+    Suffix = ".skf"
+  }
+  
+  MaxAngularMomentum {
+    C = "p"
+    H = "s"
+  }
+  
+  Mixer = Broyden {
+    MixingParameter = 0.2
+  }
+  
+  ReadInitialCharges = No
+}
+
+# TD-DFTB Linear Response settings (same as standard TD-DFTB)
+ExcitedState = {
+  Casida = {
+    NrOfExcitations = 10
+    Symmetry = Singlet
+    WriteTransitions = Yes
+    Diagonaliser = Stratmann {}
+  }
+}
+
+Analysis {
+  PrintForces = No
+  WriteEigenvectors = Yes
+  EigenvectorsAsText = Yes
+  WriteBandOut = Yes
+  MullikenAnalysis = Yes
+  WriteNetCharges = Yes
+}
+
+ParserOptions {
+  ParserVersion = 14
+}
+
+Options {
+  WriteDetailedOut = Yes
+  WriteDetailedXml = No
+  WriteAutotestTag = No
+  WriteResultsTag = No
+  RestartFrequency = 20
+  RandomSeed = 0
+  TimingVerbosity = 1
+  WriteCharges = Yes
+  WriteHS = No
+}

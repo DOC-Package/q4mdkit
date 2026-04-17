@@ -1,0 +1,40 @@
+# ORCA TD-DFT Trajectory Analysis Settings
+# Computes absorption spectra along a trajectory using ORCA TD-DFT.
+
+# Input paths (relative to this config file directory)
+input:
+  trajectory: "traj/nve.dcd"              # Trajectory file (DCD format)
+  topology: "traj/pentacene.pdb"          # Topology file (GRO/PDB/etc.)
+  qm_atoms: "traj/qmatoms"                # QM atom indices file (0-indexed)
+  orca_template: "input/orca_tddft.inp"   # ORCA input template
+  # pccharges_template: "input/pointcharges.pc"  # Optional: Point charges for QM/MM
+
+# Output settings
+output:
+  directory: "output_tdorca"              # Output directory
+  spectra_file: "absorption_spectrum.dat" # Average absorption spectrum
+  excitations_file: "excitations.dat"     # All excitation data
+  work_directory: "work"                  # Working directory name
+  individual_spectra: false               # Save spectrum for each frame
+
+# Frame selection
+frames:
+  start: 0                                # First frame to process (0-indexed)
+  n_frames: 10                            # Number of frames (null = all)
+  t0_fs: 0.0                              # Initial time (fs)
+  dt_fs: 4.0                              # Time step (fs) between frames
+
+# ORCA settings
+orca:
+  binary: "orca"                          # ORCA executable (full path recommended)
+  num_procs: 4                            # Number of MPI processes
+  num_threads: 1                          # OMP threads per process
+  memory_mb: 4000                         # Memory per core in MB
+  timeout: 3600                           # Timeout per calculation (seconds)
+
+# TD-DFT settings
+tddft:
+  n_roots: 10                             # Number of excited states to compute
+  broadening_ev: 0.1                      # Gaussian broadening width (eV)
+  energy_range_ev: [0.0, 6.0]             # Energy range for spectrum (eV)
+  n_energy_points: 1000                   # Number of points in spectrum

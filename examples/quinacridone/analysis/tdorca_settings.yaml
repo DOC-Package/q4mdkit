@@ -1,0 +1,41 @@
+# ORCA TD-DFT Configuration for Quinacridone in DMSO (NVE trajectory analysis)
+
+# Input files
+input:
+  trajectory: "nve.dcd"           # NVE trajectory (10 frames)
+  topology: "../input/quinacridone_dmso.pdb"
+  qm_atoms: "../input/qmatoms"    # 36 atoms (QAC molecule)
+  # pccharges: null               # No point charges for gas-phase TD-DFT
+  orca_template: "orca_tddft_template.inp"
+
+# Output settings
+output:
+  directory: "tdorca_output"
+  spectra_file: "absorption_spectrum.dat"
+  excitations_file: "excitations.dat"
+  work_directory: "work"
+
+# Frame selection
+frames:
+  start: 0
+  n_frames: null                  # All frames (10)
+  t0_fs: 0.0                      # Initial time
+  dt_fs: 10.0                     # Time step (estimated)
+
+# ORCA execution settings
+orca:
+  binary: "/home/takahashi/local/orca/bin/orca"
+  num_procs: 1                    # Single core (OpenMPI 4.1 not available)
+  memory_mb: 4000                 # Memory per core
+  timeout: 3600                   # 1 hour timeout per frame
+
+# TD-DFT settings
+tddft:
+  n_roots: 10                     # Number of excited states
+  broadening_ev: 0.1              # Gaussian broadening in eV
+  energy_range_ev: [1.0, 5.0]     # Energy range for spectrum (eV)
+  n_energy_points: 1000           # Points in spectrum
+
+# Spectrum output
+spectrum:
+  output_individual: false        # Save spectrum for each frame

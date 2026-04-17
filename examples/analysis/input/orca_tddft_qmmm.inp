@@ -1,0 +1,29 @@
+# ORCA TD-DFT input template with QM/MM (point charges)
+# Point charges file will be specified at runtime
+
+! B3LYP def2-SVP TightSCF
+! TDDFT
+
+%pal
+  nprocs {NPROCS}
+end
+
+%maxcore {MEMORY}
+
+# Point charges for QM/MM
+%pointcharges "pointcharges.pc"
+
+%tddft
+  nroots {NROOTS}
+  maxdim 5
+  tda false
+end
+
+%scf
+  MaxIter 200
+  ConvForced true
+end
+
+* xyz 0 1
+{XYZ_FILE}
+*

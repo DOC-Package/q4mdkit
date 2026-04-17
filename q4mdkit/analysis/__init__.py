@@ -53,3 +53,20 @@ from .electrostatic_energy import (
     run_electrostatic_energy_analysis,
     run_from_config_file as run_electrostatic_energy_from_config,
 )
+
+# TD-DFTB module (requires hsd package)
+# from .tddftb import (
+#     TDDFTBConfig,
+#     Excitation,
+#     run_tddftb_analysis,
+#     compute_absorption_spectrum,
+#     parse_exc_dat,
+# )
+
+# ORCA TD-DFT module
+# from .tdorca import (
+#     TDORCAConfig,
+#     run_tdorca_analysis,
+# )
+
+# )

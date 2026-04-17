@@ -1,0 +1,38 @@
+# TD-DFTB Configuration for Quinacridone in DMSO (NVE trajectory analysis)
+
+# Input files
+input:
+  trajectory: "../analysis/nve.dcd"    # NVE trajectory (10 frames)
+  topology: "../input/quinacridone_dmso.pdb"
+  qm_atoms: "../input/qmatoms"         # 36 atoms (QAC molecule)
+  # pccharges_template: null           # Gas-phase TD-DFTB (no point charges)
+  hsd_template: "dftb_tddftb_template.hsd"
+
+# Output settings
+output:
+  directory: "output_tddftb"
+  spectra_file: "absorption_spectrum.dat"
+  excitations_file: "excitations.dat"
+  work_directory: "work"
+  individual_spectra: false            # Save spectrum for each frame
+
+# Frame selection
+frames:
+  start: 0
+  n_frames: null                       # All frames (10)
+  t0_fs: 0.0                           # Initial time
+  dt_fs: 10.0                          # Time step (estimated)
+
+# DFTB+ execution settings
+dftb:
+  binary: "/home/takahashi/opt/dftb+/bin/dftb+"
+  library_path: "/home/takahashi/opt/dftb+/lib"
+  num_threads: 4                       # OpenMP threads
+  timeout: 300                         # 5 min timeout per frame
+
+# TD-DFTB (Linear Response) settings
+tddftb:
+  n_excitations: 10                    # Number of excited states
+  broadening_ev: 0.1                   # Gaussian broadening in eV
+  energy_range_ev: [0.0, 6.0]          # Energy range for spectrum (eV)
+  n_energy_points: 1000                # Points in spectrum

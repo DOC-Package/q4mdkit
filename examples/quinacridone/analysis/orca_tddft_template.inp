@@ -1,0 +1,27 @@
+# ORCA TD-DFT template for Quinacridone (C20H12N2O2)
+# 36 atoms, neutral singlet
+
+! B3LYP def2-SVP D3BJ TightSCF NoAutoStart
+
+%pal
+  nprocs {NPROCS}
+end
+
+%maxcore {MEMORY}
+
+%tddft
+  nroots {NROOTS}
+  maxdim 10           # Increased for better convergence
+  tda true            # TDA for stable convergence
+  printlevel 3        # Print more TD-DFT output
+end
+
+%scf
+  MaxIter 300
+  ConvForced true
+end
+
+# Geometry (coordinates will be inserted)
+* xyz 0 1
+{XYZ_FILE}
+*

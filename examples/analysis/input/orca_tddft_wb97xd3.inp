@@ -1,0 +1,26 @@
+# ORCA TD-DFT input template with wB97X-D3
+# Range-separated hybrid + dispersion
+
+! wB97X-D3 def2-SVP TightSCF
+! TDDFT
+
+%pal
+  nprocs {NPROCS}
+end
+
+%maxcore {MEMORY}
+
+%tddft
+  nroots {NROOTS}
+  maxdim 5
+  tda false
+end
+
+%scf
+  MaxIter 200
+  ConvForced true
+end
+
+* xyz 0 1
+{XYZ_FILE}
+*

@@ -1,0 +1,27 @@
+# ORCA RI-TD-DFT input template (fast approximation)
+# Uses RIJCOSX for speed
+
+! B3LYP def2-SVP def2/J RIJCOSX TightSCF
+! TDDFT
+
+%pal
+  nprocs {NPROCS}
+end
+
+%maxcore {MEMORY}
+
+%tddft
+  nroots {NROOTS}
+  maxdim 5
+  tda true           # TDA is faster, often good enough
+  # tda false        # Set to false for full TD-DFT
+end
+
+%scf
+  MaxIter 200
+  ConvForced true
+end
+
+* xyz 0 1
+{XYZ_FILE}
+*

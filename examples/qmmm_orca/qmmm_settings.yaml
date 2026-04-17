@@ -1,0 +1,77 @@
+# QM/MM Settings Configuration File (ORCA backend)
+
+# File paths
+paths:
+  sk_dir: "/home/takahashi/qmmm/sk/3ob"
+  # AMBER topology files
+  amber_prmtop: "input/system.prmtop"
+  amber_inpcrd: "input/system.inpcrd"
+  # Optional: box file for custom PBC vectors
+  boxfile: null
+  # QM atom indices file
+  qatoms: "input/qmatoms"
+  actatoms: "input/actatoms"
+
+# Parallel settings
+parallel:
+  numcores_qm: 8
+  numcores_mm: 4
+
+# QM region settings
+qm:
+  charge: 0
+  mult: 1
+
+# QM backend selection: "dftb" or "orca"
+qm_backend: "orca"
+
+# DFTB parameters (used when qm_backend: dftb)
+dftb:
+  library_path: null
+  slater_koster_files:
+    C-C: "{sk_dir}/C-C.skf"
+    C-H: "{sk_dir}/C-H.skf"
+    H-C: "{sk_dir}/H-C.skf"
+    H-H: "{sk_dir}/H-H.skf"
+  hubbard_derivs:
+    H: -0.1857
+    C: -0.1492
+  hcorrection_zeta: 4.0
+  max_scc_iterations: 300
+  third_order_full: true
+  scc_log_enabled: false
+  scc_logfile: "scc_error.dat"
+  keep_detailed: false
+  log_energy: false
+  energy_logfile: "qm_energy.dat"
+
+# ORCA parameters (used when qm_backend: orca)
+orca:
+  orcadir: "/home/takahashi/local/orca/bin"
+  # Method selection examples:
+  # DFT with D3BJ dispersion:
+  #   "! B3LYP def2-SVP D3BJ TightSCF"
+  # RI-accelerated DFT (recommended for large QM regions):
+  #   "! RI-B3LYP def2-SVP def2/J RIJCOSX D3BJ TightSCF"
+  # Range-separated hybrid for CT states:
+  #   "! CAM-B3LYP def2-SVP D3BJ TightSCF"
+  # HF for reference:
+  #   "! HF def2-SVP TightSCF"
+  orcasimpleinput: "! B3LYP def2-SVP D3BJ TightSCF"
+  orcablocks: |
+    %scf
+      MaxIter 300
+    end
+  numcores: 8
+  log_enabled: true
+  keep_output: false
+  energy_logfile: "orca_energy.dat"
+
+# OpenMM settings
+openmm:
+  periodic: true
+  periodic_nonbonded_cutoff: 9.0
+  autoconstraints: null
+  rigidwater: false
+  hydrogenmass: 1.5
+  platform: "CPU"

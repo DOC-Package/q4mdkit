@@ -3,8 +3,8 @@
 Calculate energy difference between cation and neutral states.
 
 Reads:
-- energies_cation.dat: Cation energies (6th column)
-- energies_neutral.dat: Neutral energies (6th column)
+- qm_energy_sampled.dat: Cation energies
+- energies.dat: Neutral energies
 
 Outputs:
 - energy_diff.dat: Energy difference (Cation - Neutral) in a.u. and eV
@@ -15,34 +15,29 @@ import numpy as np
 # Conversion factor from Hartree to eV
 HARTREE_TO_EV = 27.211386245988
 
-def read_energies(filename):
-    """Read energies from file (6th column)"""
-    frames = []
-    times = []
-    energies = []
-    with open(filename, 'r') as f:
-        for line in f:
-            if line.startswith('#') or line.strip() == '':
-                continue
-            cols = line.split()
-            # Skip incomplete rows (need at least 6 columns)
-            if len(cols) < 6:
-                continue
-            try:
-                frame = int(cols[0])
-                time = float(cols[1])
-                energy = float(cols[4])  # 6th column
-                frames.append(frame)
-                times.append(time)
-                energies.append(energy)
-            except (ValueError, IndexError):
-                continue
-    return np.array(frames), np.array(times), np.array(energies)
+def read_neutral_energies(filename):
+    """Read neutral energies from qm_energy_sampled.dat"""
+    data = np.loadtxt(filename, comments='#')
+    # columns: call_index, time[fs], energy[a.u.]
+    times = data[:, 1]
+    energies = data[:, 2]
+    return times, energies
+
+def read_cation_energies(filename):
+    """Read cation energies from energies.dat"""
+    data = np.loadtxt(filename, comments='#')
+    # columns: Frame, Time(fs), Energy(a.u.)
+    frames = data[:, 0].astype(int)
+    times = data[:, 1]
+    energies = data[:, 2]
+    return frames, times, energies
 
 def main():
     # Read input files
-    cation_frames, cation_times, cation_energies = read_energies('energies_frozen_cation.dat')
-    neutral_frames, neutral_times, neutral_energies = read_energies('energies_frozen_neutral.dat')
+    #neutral_times, neutral_energies = read_neutral_energies('qm_energy_sampled.dat')
+    #cation_frames, cation_times, cation_energies = read_cation_energies('energies.dat')
+    neutral_times, neutral_energies = read_neutral_energies('energies_cation.dat')
+    cation_frames, cation_times, cation_energies = read_cation_energies('energies_neutral.dat')
     
     # Check that the number of data points match
     n_cation = len(cation_energies)
@@ -64,8 +59,8 @@ def main():
     dE_au = cation_energies[:n_points] - neutral_energies[:n_points]
     dE_eV = dE_au * HARTREE_TO_EV
     
-    # Write output file
-    output_file = 'energy_diff.dat'
+    # Write output file in the same format as energy_diff_all_pentacene.dat
+    output_file = 'energy_diff_wopc.dat'
     with open(output_file, 'w') as f:
         f.write("# Energy Difference (Cation - Neutral)\n")
         f.write("# Frame  Time(fs)        dE(a.u.)           dE(eV)\n")

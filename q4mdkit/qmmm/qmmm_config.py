@@ -162,6 +162,99 @@ class DFTBTheory_LogSCC:
         return res
 
 
+class ORCATheory_Log:
+    """
+    ORCATheory wrapper that logs energy and SCF information.
+    
+    Extracts energy and optionally saves ORCA output files for each
+    gradient calculation.
+    """
+    
+    def __init__(self, *args, energy_logfile="orca_energy.dat",
+                 keep_output=False, output_dir="output", **kwargs):
+        """
+        Initialize ORCATheory with logging.
+        
+        Args:
+            energy_logfile: Filename for energy log (saved in output_dir).
+            keep_output: If True, save ORCA output for each step.
+            output_dir: Directory to save log files.
+            *args, **kwargs: Passed to ORCATheory.__init__
+        """
+        from ash import ORCATheory
+        self._orca = ORCATheory(*args, **kwargs)
+        self._callidx = 0
+        # Use absolute path to avoid issues when working directory changes
+        self._output_dir = Path(output_dir).resolve()
+        self._output_dir.mkdir(parents=True, exist_ok=True)
+        self._energy_logfile = self._output_dir / energy_logfile
+        self._keep_output = keep_output
+        # Get the ORCA filename from the wrapped theory
+        self._orca_filename = kwargs.get('filename', 'orca')
+        # Overwrite log file at start
+        self._energy_logfile.write_text("# call_index  Total_Energy(H)\n")
+    
+    def __getattr__(self, name):
+        """Delegate attribute access to wrapped ORCATheory."""
+        return getattr(self._orca, name)
+    
+    def _read_energy_from_output(self, outfile=None):
+        """
+        Read final single point energy from ORCA output file.
+        
+        Args:
+            outfile: Path to ORCA output file.
+        
+        Returns:
+            float: Total energy in Hartree, or None if not found.
+        """
+        if outfile is None:
+            outfile = f"{self._orca_filename}.out"
+        p = Path(outfile)
+        if not p.exists():
+            return None
+        txt = p.read_text(errors="ignore")
+        
+        # Parse final energy from ORCA output
+        # Format: "FINAL SINGLE POINT ENERGY      -230.123456789"
+        pat = re.compile(r"FINAL SINGLE POINT ENERGY\s+([-+]?\d+\.\d+)")
+        matches = pat.findall(txt)
+        if not matches:
+            return None
+        return float(matches[-1])
+    
+    def run(self, *args, **kwargs):
+        """
+        Run ORCA calculation and log energy if Grad=True.
+        
+        Args:
+            *args, **kwargs: Passed to ORCATheory.run()
+        
+        Returns:
+            Result from ORCATheory.run()
+        """
+        Grad = kwargs.get("Grad", False)
+        res = self._orca.run(*args, **kwargs)
+        
+        if Grad:
+            # Log energy
+            energy = self._read_energy_from_output()
+            if energy is not None:
+                with self._energy_logfile.open("a") as f:
+                    f.write(f"{self._callidx:8d}  {energy:20.10f}\n")
+            
+            # Keep ORCA output if requested
+            if self._keep_output:
+                outfile = f"{self._orca_filename}.out"
+                if Path(outfile).exists():
+                    dest = self._output_dir / f"orca_{self._callidx:06d}.out"
+                    shutil.copy(outfile, dest)
+            
+            self._callidx += 1
+        
+        return res
+
+
 class QMMMConfig:
     """Configuration manager for QM/MM calculations."""
     
@@ -208,6 +301,9 @@ class QMMMConfig:
         self.numcores_qm = parallel.get('numcores_qm', 1)
         self.numcores_mm = parallel.get('numcores_mm', 1)
         
+        # QM backend selection: "dftb" or "orca"
+        self.qm_backend = config.get('qm_backend', 'dftb').lower()
+        
         # DFTB settings
         dftb = config.get('dftb', {})
         self.dftb_library_path = dftb.get('library_path', None)
@@ -225,6 +321,16 @@ class QMMMConfig:
         self.keep_detailed = dftb.get('keep_detailed', False)
         self.energy_log = dftb.get('energy_log', False)
         self.energy_logfile = dftb.get('energy_logfile', 'qm_energy.dat')
+        
+        # ORCA settings
+        orca = config.get('orca', {})
+        self.orca_dir = orca.get('orcadir', None)
+        self.orcasimpleinput = orca.get('orcasimpleinput', '! B3LYP def2-SVP D3BJ TightSCF')
+        self.orcablocks = orca.get('orcablocks', '')
+        self.orca_numcores = orca.get('numcores', self.numcores_qm)
+        self.orca_log = orca.get('log_enabled', False)
+        self.orca_keep_output = orca.get('keep_output', False)
+        self.orca_energy_logfile = orca.get('energy_logfile', 'orca_energy.dat')
         
         # OpenMM settings
         openmm = config.get('openmm', {})
@@ -429,7 +535,53 @@ class QMMMConfig:
             from ash import DFTBTheory
             return DFTBTheory(**dftb_kwargs)
     
-    def create_qmmm_theory(self, frag, qmatoms, omm=None, qm_dftb=None):
+    def create_orca_theory(self):
+        """
+        Create ORCATheory object for QM/MM calculations.
+        
+        If orca_log is True, returns ORCATheory_Log which logs
+        energy information after each gradient calculation.
+        
+        Returns:
+            ORCATheory or ORCATheory_Log: Configured ORCA theory object.
+        """
+        # Build common ORCA parameters
+        orca_kwargs = {
+            "orcasimpleinput": self.orcasimpleinput,
+            "orcablocks": self.orcablocks,
+            "numcores": self.orca_numcores,
+            "bind_to_core_option": False,  # Disable for Intel MPI (ORCA 6)
+            "printlevel": 2
+        }
+        
+        # Only add orcadir if specified
+        if self.orca_dir is not None:
+            orca_kwargs["orcadir"] = self.orca_dir
+        
+        if self.orca_log:
+            return ORCATheory_Log(
+                **orca_kwargs,
+                energy_logfile=self.orca_energy_logfile,
+                keep_output=self.orca_keep_output,
+                output_dir="output"
+            )
+        else:
+            from ash import ORCATheory
+            return ORCATheory(**orca_kwargs)
+    
+    def create_qm_theory(self):
+        """
+        Create QM theory object based on qm_backend setting.
+        
+        Returns:
+            Theory object (DFTBTheory, ORCATheory, or their Log variants).
+        """
+        if self.qm_backend == 'orca':
+            return self.create_orca_theory()
+        else:
+            return self.create_dftb_theory()
+    
+    def create_qmmm_theory(self, frag, qmatoms, omm=None, qm_theory=None, qm_dftb=None):
         """
         Create QMMMTheory object.
         
@@ -437,7 +589,9 @@ class QMMMConfig:
             frag: ASH Fragment object.
             qmatoms: List of QM atom indices.
             omm: OpenMMTheory object. If None, creates a new one.
-            qm_dftb: DFTBTheory object. If None, creates a new one.
+            qm_theory: QM theory object (DFTBTheory, ORCATheory, etc.).
+                      If None, creates based on qm_backend setting.
+            qm_dftb: Deprecated, use qm_theory instead.
         
         Returns:
             QMMMTheory: Configured QM/MM theory object.
@@ -446,11 +600,16 @@ class QMMMConfig:
         
         if omm is None:
             omm = self.create_openmm_theory()
-        if qm_dftb is None:
-            qm_dftb = self.create_dftb_theory()
+        
+        # Handle qm_theory (prefer qm_theory over deprecated qm_dftb)
+        if qm_theory is None:
+            if qm_dftb is not None:
+                qm_theory = qm_dftb  # Backward compatibility
+            else:
+                qm_theory = self.create_qm_theory()
         
         return QMMMTheory(
-            qm_theory=qm_dftb,
+            qm_theory=qm_theory,
             mm_theory=omm,
             fragment=frag,
             qmatoms=qmatoms,
@@ -477,14 +636,24 @@ class QMMMConfig:
         print(f"  QM atoms:        {len(qmatoms)}")
         print(f"  MM atoms:        {mm_atoms}")
         print(f"  QM charge/mult:  {self.qm_charge}/{self.qm_mult}")
-        print(f"  DFTB method:     DFTB3/3ob-3-1")
+        if self.qm_backend == 'orca':
+            print(f"  QM method:       ORCA")
+            print(f"  ORCA input:      {self.orcasimpleinput}")
+        else:
+            print(f"  QM method:       DFTB3/3ob-3-1")
         print(f"  MM cutoff:       {self.periodic_nonbonded_cutoff} Å")
         print(f"  H mass:          {self.hydrogenmass} Da")
     
     def print_config(self):
         """Print current configuration summary."""
         print(f"\nQM/MM Configuration ({self.config_file}):")
-        print(f"  SK directory:    {self.sk_dir}")
+        print(f"  QM backend:      {self.qm_backend.upper()}")
+        if self.qm_backend == 'orca':
+            print(f"  ORCA dir:        {self.orca_dir}")
+            print(f"  ORCA input:      {self.orcasimpleinput}")
+            print(f"  ORCA cores:      {self.orca_numcores}")
+        else:
+            print(f"  SK directory:    {self.sk_dir}")
         print(f"  AMBER prmtop:    {self.amber_prmtop}")
         print(f"  AMBER inpcrd:    {self.amber_inpcrd}")
         if self.pdbfile:
@@ -543,9 +712,17 @@ def create_dftb_theory():
     """Create DFTBTheory object."""
     return get_config().create_dftb_theory()
 
-def create_qmmm_theory(frag, qmatoms, omm=None, qm_dftb=None):
+def create_orca_theory():
+    """Create ORCATheory object."""
+    return get_config().create_orca_theory()
+
+def create_qm_theory():
+    """Create QM theory object based on qm_backend setting."""
+    return get_config().create_qm_theory()
+
+def create_qmmm_theory(frag, qmatoms, omm=None, qm_theory=None, qm_dftb=None):
     """Create QMMMTheory object."""
-    return get_config().create_qmmm_theory(frag, qmatoms, omm, qm_dftb)
+    return get_config().create_qmmm_theory(frag, qmatoms, omm, qm_theory, qm_dftb)
 
 def print_system_info(frag, qmatoms):
     """Print system information."""

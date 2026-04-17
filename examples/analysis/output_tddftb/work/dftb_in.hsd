@@ -1,0 +1,66 @@
+Geometry {
+  xyzFormat {
+    <<< "qm_coords.xyz"
+  }
+}
+
+Hamiltonian {
+  DFTB {
+    Scc = Yes
+    SccTolerance = 1e-05
+    MaxSccIterations = 300
+    HCorrection {
+      Damping {
+        Exponent = 4.0
+      }
+    }
+    SlaterKosterFiles {
+      C-C = '/home/takahashi/qmmm/sk/3ob/C-C.skf'
+      C-H = '/home/takahashi/qmmm/sk/3ob/C-H.skf'
+      H-C = '/home/takahashi/qmmm/sk/3ob/H-C.skf'
+      H-H = '/home/takahashi/qmmm/sk/3ob/H-H.skf'
+    }
+    MaxAngularMomentum {
+      C = "p"
+      H = "s"
+    }
+    Mixer {
+      Broyden {
+        MixingParameter = 0.2
+      }
+    }
+    ReadInitialCharges = No
+  }
+}
+ExcitedState {
+  Casida {
+    NrOfExcitations = 10
+    Symmetry = Singlet
+    WriteTransitions = Yes
+    Diagonaliser {
+      Stratmann {}
+    }
+  }
+}
+Analysis {
+  PrintForces = No
+  WriteEigenvectors = Yes
+  EigenvectorsAsText = Yes
+  WriteBandOut = Yes
+  MullikenAnalysis = Yes
+  WriteNetCharges = Yes
+}
+ParserOptions {
+  ParserVersion = 14
+}
+Options {
+  WriteDetailedOut = Yes
+  WriteDetailedXml = No
+  WriteAutotestTag = No
+  WriteResultsTag = No
+  RestartFrequency = 20
+  RandomSeed = 0
+  TimingVerbosity = 1
+  WriteCharges = Yes
+  WriteHS = No
+}

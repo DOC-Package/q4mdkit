@@ -515,7 +515,7 @@ def plot_results(results: dict, output_dir: str = '.'):
 def main():
     """Main analysis routine."""
     # Input parameters
-    input_file = 'energy_diff_mean_subtracted.dat'
+    input_file = 'energy_diff.dat'
     dt = 4.0  # fs (time step between frames)
     T = 300.0  # K (temperature)
     

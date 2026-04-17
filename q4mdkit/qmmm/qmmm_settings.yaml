@@ -20,6 +20,9 @@ qm:
   charge: 0
   mult: 1
 
+# QM backend selection: "dftb" or "orca"
+qm_backend: "dftb"
+
 # DFTB parameters
 dftb:
   library_path: null  # Path to DFTB+ binary directory (e.g., /path/to/dftbplus/bin)
@@ -40,6 +43,26 @@ dftb:
   keep_detailed: false     # Keep detailed.out for each step (detailed_NNNNNN.out)
   log_energy: false        # Log QM total energy at each step
   energy_logfile: "qm_energy.dat"  # Output file for energy log
+
+# ORCA parameters
+orca:
+  orcadir: null  # Path to ORCA bin directory (e.g., /home/user/local/orca/bin)
+  # ORCA simple input line (method, basis set, etc.)
+  # Examples:
+  #   DFT: "! B3LYP def2-SVP D3BJ TightSCF"
+  #   RI-DFT: "! RI-B3LYP def2-SVP def2/J RIJCOSX D3BJ TightSCF"
+  #   HF: "! HF def2-SVP TightSCF"
+  orcasimpleinput: "! B3LYP def2-SVP D3BJ TightSCF"
+  # ORCA block input for advanced settings
+  orcablocks: |
+    %scf
+      MaxIter 300
+    end
+  numcores: 4            # Number of cores for ORCA parallel execution
+  # Logging settings
+  log_enabled: false     # Enable energy logging
+  keep_output: false     # Keep ORCA output for each step (orca_NNNNNN.out)
+  energy_logfile: "orca_energy.dat"  # Output file for energy log
 
 # OpenMM settings
 openmm:

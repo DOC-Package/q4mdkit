@@ -1,0 +1,71 @@
+# QM/MM Settings for Picene with ORCA backend
+
+# File paths
+paths:
+  sk_dir: "/home/takahashi/qmmm/sk/3ob"
+  # AMBER topology files
+  amber_prmtop: "input/picene.prmtop"
+  amber_inpcrd: "input/picene.inpcrd"
+  # Box file for PBC vectors
+  boxfile: "input/picene.box"
+  # QM atom indices file
+  qatoms: "input/qmatoms"
+  actatoms: "input/qmatoms"
+
+# Parallel settings
+parallel:
+  numcores_qm: 8
+  numcores_mm: 4
+
+# QM region settings
+qm:
+  charge: 0
+  mult: 1
+
+# QM backend selection: "dftb" or "orca"
+qm_backend: "orca"
+
+# DFTB parameters (not used when qm_backend: orca)
+dftb:
+  library_path: null
+  slater_koster_files:
+    C-C: "{sk_dir}/C-C.skf"
+    C-H: "{sk_dir}/C-H.skf"
+    H-C: "{sk_dir}/H-C.skf"
+    H-H: "{sk_dir}/H-H.skf"
+  hubbard_derivs:
+    H: -0.1857
+    C: -0.1492
+  hcorrection_zeta: 4.0
+  max_scc_iterations: 300
+  third_order_full: true
+  scc_log_enabled: false
+  scc_logfile: "scc_error.dat"
+  keep_detailed: false
+  log_energy: false
+  energy_logfile: "qm_energy.dat"
+
+# ORCA parameters
+orca:
+  orcadir: "/home/takahashi/local/orca/bin"
+  # B3LYP with RIJCOSX for speed (36 atoms QM region)
+  # Note: Using 1 core due to OpenMPI 4.1 not being available
+  orcasimpleinput: "! B3LYP def2-SVP def2/J RIJCOSX D3BJ TightSCF"
+  orcablocks: |
+    %scf
+      MaxIter 300
+    end
+  numcores: 1  # Single core (OpenMPI 4.1 required for parallel)
+  log_enabled: true
+  keep_output: false
+  energy_logfile: "orca_energy.dat"
+
+# OpenMM settings
+openmm:
+  periodic: true
+  periodic_nonbonded_cutoff: 9.0
+  use_boxfile: true
+  autoconstraints: null
+  rigidwater: false
+  hydrogenmass: 1.5
+  platform: "CPU"

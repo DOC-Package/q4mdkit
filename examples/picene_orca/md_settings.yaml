@@ -1,0 +1,26 @@
+# MD Settings for Picene ORCA QM/MM
+
+# MD parameters
+md:
+  # Conservative timestep for ab initio QM/MM
+  timestep: 0.0005         # ps (0.5 fs)
+  traj_frequency: 20       # Save every 20 steps (10 fs)
+  integrator:
+    nvt: "LangevinMiddleIntegrator"
+    npt: "LangevinMiddleIntegrator"
+    nve: "VelocityVerletIntegrator"
+  nvt:
+    temperature: 300.0       # K
+    coupling_frequency: 1    # 1/ps
+  npt:
+    barostat: "MonteCarloBarostat"
+    pressure: 1              # bar
+    barostat_frequency: 25   # steps
+  simulation_time:
+    nvt: 0.1               # ps (100 fs = 200 steps, for testing)
+    npt: 0.1               # ps
+    nve: 0.1               # ps
+
+# Output settings
+output:
+  directory: "output"

@@ -1,0 +1,38 @@
+Geometry = xyzFormat {
+<<< 'dftb_.xyz' 
+}
+Hamiltonian = DFTB {
+ElectricField = { 
+  PointCharges = { 
+    GaussianBlurWidth [Angstrom] = 0.0
+    CoordsAndCharges [Angstrom] = DirectRead { 
+    Records = 17604
+    File = 'PCcharges.dat'
+    }
+  }
+}
+  HCorrection  = Damping {
+   Exponent = 4.0
+   }
+  Scc = Yes
+  MaxSCCIterations = 300
+  ThirdOrderFull = Yes
+  ThirdOrder = No
+  HubbardDerivs {
+    H = -0.1857
+    C = -0.1492
+   }
+  SlaterKosterFiles {
+    C-C = '/home/takahashi/qmmm/sk/3ob/C-C.skf'
+    C-H = '/home/takahashi/qmmm/sk/3ob/C-H.skf'
+    H-C = '/home/takahashi/qmmm/sk/3ob/H-C.skf'
+    H-H = '/home/takahashi/qmmm/sk/3ob/H-H.skf'
+  }
+  MaxAngularMomentum {
+    H = "s"
+    C = "p"
+  }
+}
+Options { WriteDetailedOut = Yes }
+ParserOptions { ParserVersion = 10 }
+Analysis { PrintForces = Yes }
