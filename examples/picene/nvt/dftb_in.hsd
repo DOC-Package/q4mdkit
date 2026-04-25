@@ -29,8 +29,16 @@ ElectricField = {
     H-H = '/home/takahashi/qmmm/sk/3ob/H-H.skf'
   }
   MaxAngularMomentum {
-    H = "s"
     C = "p"
+    H = "s"
+  }
+  Dispersion = DFTD3 {
+    Damping = BeckeJohnson {
+      a1 = 0.746
+      a2 = 4.191
+    }
+    s6 = 1.0
+    s8 = 3.209
   }
 }
 Options { WriteDetailedOut = Yes }

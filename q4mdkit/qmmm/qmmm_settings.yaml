@@ -37,6 +37,18 @@ dftb:
   hcorrection_zeta: 4.0
   max_scc_iterations: 300  # Maximum SCC iterations for DFTB
   third_order_full: true   # Enable DFTB3 third-order correction
+  # Dispersion correction
+  # Options: DFTD3, DFTD4, SimpleDFTD3, SlaterKirkwood, LennardJones, TS, MBD
+  dispersion: null
+  # Optional parameters for dispersion
+  # Example for DFTD3 with BJ damping (3ob parameters):
+  #   Damping:
+  #     type: "BeckeJohnson"
+  #     a1: 0.746
+  #     a2: 4.191
+  #   s6: 1.0
+  #   s8: 3.209
+  dispersion_params: null
   # SCC error logging (extract from detailed.out at each MD step)
   scc_log_enabled: false   # Enable SCC convergence logging
   scc_logfile: "scc_error.dat"  # Output file for SCC error log

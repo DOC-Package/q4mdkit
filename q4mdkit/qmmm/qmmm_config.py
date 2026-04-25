@@ -315,6 +315,9 @@ class QMMMConfig:
         self.hcorrection_zeta = dftb.get('hcorrection_zeta', 4.0)
         self.max_scc_iterations = dftb.get('max_scc_iterations', 300)
         self.third_order_full = dftb.get('third_order_full', True)
+        # Dispersion correction
+        self.dispersion = dftb.get('dispersion', None)
+        self.dispersion_params = dftb.get('dispersion_params', None)
         # SCC logging settings
         self.scc_log = dftb.get('scc_log', False)
         self.scc_logfile = dftb.get('scc_logfile', 'scc_error.dat')
@@ -514,6 +517,8 @@ class QMMMConfig:
             "hubbard_derivs_dict": self.hubbard_derivs,
             "hcorrection_zeta": self.hcorrection_zeta,
             "MaxSCCIterations": self.max_scc_iterations,
+            "dispersion": self.dispersion,
+            "dispersion_params": self.dispersion_params,
             "numcores": self.numcores_qm,
             "printlevel": 2
         }

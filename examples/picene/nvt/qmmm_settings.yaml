@@ -26,6 +26,16 @@ dftb:
     H-C: "{sk_dir}/H-C.skf"
     H-H: "{sk_dir}/H-H.skf"
   third_order_full: true   
+  # Dispersion correction
+  # Options: DFTD3, DFTD4, SimpleDFTD3, SlaterKirkwood, LennardJones, TS, MBD
+  dispersion: "DFTD3"
+  dispersion_params:
+    Damping:
+      type: "BeckeJohnson"
+      a1: 0.746
+      a2: 4.191
+    s6: 1.0
+    s8: 3.209
   hubbard_derivs:
     H: -0.1857
     C: -0.1492
