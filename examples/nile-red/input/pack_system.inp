@@ -1,0 +1,18 @@
+tolerance 2.0
+filetype pdb
+output nile-red_acetone.pdb
+
+# Solute
+structure ../nile-red.pdb
+  number 1
+  center
+  fixed 17.4 17.4 17.4 0. 0. 0.
+  resnumbers 2
+end structure
+
+# Solvent
+structure ../../solvent/acetone/acetone.pdb
+  number 340
+  inside box 0. 0. 0. 34.8 34.8 34.8
+  resnumbers 2
+end structure

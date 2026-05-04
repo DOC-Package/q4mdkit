@@ -1,0 +1,21 @@
+source leaprc.gaff2
+
+# Solute
+QUC = loadmol2 ../nile-red_gaff2.mol2
+loadamberparams ../nile-red_gaff2.frcmod
+
+# Solvent
+ACE = loadmol2 ../../solvent/acetone/acetone_gaff2.mol2
+loadamberparams ../../solvent/acetone/acetone_gaff2.frcmod
+
+# System
+SYS = loadpdb nile-red_acetone.pdb
+
+# Box
+set SYS box {34.8 34.8 34.8}
+
+check SYS
+
+saveAmberParm SYS nile-red_acetone.prmtop nile-red_acetone.inpcrd
+savePDB SYS nile-red_acetone_leap.pdb
+quit
