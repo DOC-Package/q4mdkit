@@ -1,8 +1,8 @@
 source leaprc.gaff2
 
 # Solute
-QUC = loadmol2 ../nile-red_gaff2.mol2
-loadamberparams ../nile-red_gaff2.frcmod
+NRD = loadmol2 ../input-sub/nile-red_gaff2.mol2
+loadamberparams ../input-sub/nile-red_gaff2.frcmod
 
 # Solvent
 ACE = loadmol2 ../../solvent/acetone/acetone_gaff2.mol2

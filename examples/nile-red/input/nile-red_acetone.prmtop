@@ -1,4 +1,4 @@
-%VERSION  VERSION_STAMP = V0001.000  DATE = 05/04/26  20:17:20                  
+%VERSION  VERSION_STAMP = V0001.000  DATE = 05/05/26  13:29:36                  
 %FLAG TITLE                                                                     
 %FORMAT(20a4)                                                                   
 default_name                                                                    
@@ -2619,7 +2619,7 @@ H5  H6
       45
 %FLAG RESIDUE_LABEL                                                             
 %FORMAT(20a4)                                                                   
-QUC ACE ACE ACE ACE ACE ACE ACE ACE ACE ACE ACE ACE ACE ACE ACE ACE ACE ACE ACE 
+NRD ACE ACE ACE ACE ACE ACE ACE ACE ACE ACE ACE ACE ACE ACE ACE ACE ACE ACE ACE 
 ACE ACE ACE ACE ACE ACE ACE ACE ACE ACE ACE ACE ACE ACE ACE ACE ACE ACE ACE ACE 
 ACE ACE ACE ACE ACE ACE ACE ACE ACE ACE ACE ACE ACE ACE ACE ACE ACE ACE ACE ACE 
 ACE ACE ACE ACE ACE ACE ACE ACE ACE ACE ACE ACE ACE ACE ACE ACE ACE ACE ACE ACE 

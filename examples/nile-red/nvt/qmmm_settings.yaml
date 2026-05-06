@@ -1,12 +1,12 @@
-# QM/MM Settings Configuration File
+# QM/MM Settings Configuration File (LC-DFTB / OB2)
 
 # File paths
 paths:
   sk_dir: "/home/takahashi/qmmm/sk/ob2/split"
-  amber_prmtop: "../input/quinacridone_dmso.prmtop"
-  pdbfile: "../input/quinacridone_dmso.pdb"
+  amber_prmtop: "../input/nile-red_acetone.prmtop"
+  pdbfile: "../input/nile-red_acetone.pdb"
   qatoms: "../input/qmatoms"
-  boxfile: "../input/quinacridone_dmso.box"
+  boxfile: "../input/nile-red_acetone.box"
 
 # Parallel settings
 parallel:
@@ -18,7 +18,7 @@ qm:
   charge: 0
   mult: 1
 
-# DFTB parameters
+# DFTB parameters (LC-DFTB2 with OB2)
 dftb:
   slater_koster_files:
     C-C: "{sk_dir}/C-C.skf"
@@ -37,22 +37,49 @@ dftb:
     O-N: "{sk_dir}/O-N.skf"
     H-O: "{sk_dir}/H-O.skf"
     O-H: "{sk_dir}/O-H.skf"
-  third_order_full: true   
-  hubbard_derivs:
-      H: -0.1857
-      C: -0.1492
-      N: -0.1535
-      O: -0.1575
-  hcorrection_zeta: 4.0
-  max_scc_iterations: 300  
-  scc_log: true   
-  energy_log: true               
+
+  third_order_full: false
+
+  max_scc_iterations: 500
+
+  mixer:
+    method: Broyden          # Broyden / Anderson / Simple / DIIS
+    params:
+      MixingParameter: 0.05
+  
+  filling:
+    method: Fermi
+    params:
+      "Temperature [K]": 1000 
+
+  read_initial_charges: true
+
+  scc_log: true
+  energy_log: true
+
+  # Long-range corrected DFTB を有効化
+  range_separated:
+    method: LC               # ω は SK ファイル (OB2: ω=0.3 a.u.) から決定
+    screening: MatrixBased
+    screening_params: {}
+    #screening: NeighbourBased
+    #screening_params:
+    #  "CutoffReduction [Bohr]": 0.0
+
+  dispersion: "DFTD3"
+  dispersion_params:
+    Damping:
+      type: "BeckeJohnson"
+      a1: 0.497
+      a2: 3.622
+    s6: 1.0
+    s8: 0.010
 
 # OpenMM settings
 openmm:
   periodic: true
   periodic_nonbonded_cutoff: 9.0
   use_boxfile: true
-  autoconstraints: HBonds  # for MD
+  autoconstraints: HBonds
   hydrogenmass: 1.0
   platform: "CPU"

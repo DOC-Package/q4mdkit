@@ -10,7 +10,7 @@ qmmm_config = get_config("qmmm_settings.yaml")
 md_config = get_md_config("md_settings.yaml")
 
 # input: initial structure (testing)
-input_pdb = "../nvt_mm/output/nvt_lastframe.pdb"
+input_pdb = "../nvt-mm/output/nvt_lastframe.pdb"
 
 # output directory
 output_dir = "output"

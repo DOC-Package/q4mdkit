@@ -3,7 +3,7 @@ filetype pdb
 output nile-red_acetone.pdb
 
 # Solute
-structure ../nile-red.pdb
+structure ../input-sub/nile-red.pdb
   number 1
   center
   fixed 17.4 17.4 17.4 0. 0. 0.

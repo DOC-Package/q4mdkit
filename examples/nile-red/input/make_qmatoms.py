@@ -23,13 +23,14 @@ def get_qmatoms(pdb_file, resid=None, resname=None):
         resname: Residue name to select
     
     Returns:
-        List of atom indices (1-indexed for Amber)
+        List of atom indices (0-indexed for ASH)
     """
     atoms = []
     with open(pdb_file) as f:
         for line in f:
             if line.startswith(('ATOM', 'HETATM')):
-                atom_idx = int(line[6:11])
+                # PDB serial is 1-indexed; convert to 0-indexed for ASH
+                atom_idx = int(line[6:11]) - 1
                 res_name = line[17:20].strip()
                 res_num = int(line[22:26])
                 

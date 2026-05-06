@@ -311,13 +311,41 @@ class QMMMConfig:
         self.slater_koster_files = {
             k: v.format(sk_dir=self.sk_dir) for k, v in sk_files.items()
         }
-        self.hubbard_derivs = dftb.get('hubbard_derivs', {})
-        self.hcorrection_zeta = dftb.get('hcorrection_zeta', 4.0)
+        self.hubbard_derivs = dftb.get('hubbard_derivs', None)
+        # Treat empty dict as "not specified" to avoid writing an empty
+        # HubbardDerivs {} block (which DFTB+ rejects with a parser error).
+        if not self.hubbard_derivs:
+            self.hubbard_derivs = None
+        self.hcorrection_zeta = dftb.get('hcorrection_zeta', None)
         self.max_scc_iterations = dftb.get('max_scc_iterations', 300)
         self.third_order_full = dftb.get('third_order_full', True)
         # Dispersion correction
         self.dispersion = dftb.get('dispersion', None)
         self.dispersion_params = dftb.get('dispersion_params', None)
+        # Range-separated (LC-DFTB) settings
+        # Example YAML:
+        #   range_separated:
+        #     method: LC
+        #     screening: NeighbourBased
+        #     screening_params:
+        #       "CutoffReduction [Bohr]": 0.0
+        self.range_separated = dftb.get('range_separated', None)
+        # SCC mixer settings
+        # Example YAML:
+        #   mixer:
+        #     method: Broyden          # Broyden | Anderson | Simple | DIIS
+        #     params:
+        #       MixingParameter: 0.05
+        self.mixer = dftb.get('mixer', None)
+        # Filling (electron occupation / smearing).
+        # Example YAML:
+        #   filling:
+        #     method: Fermi
+        #     params:
+        #       "Temperature [K]": 1000
+        self.filling = dftb.get('filling', None)
+        # Reuse SCC charges across calls (reads charges.bin from previous step)
+        self.read_initial_charges = dftb.get('read_initial_charges', False)
         # SCC logging settings
         self.scc_log = dftb.get('scc_log', False)
         self.scc_logfile = dftb.get('scc_logfile', 'scc_error.dat')
@@ -519,6 +547,10 @@ class QMMMConfig:
             "MaxSCCIterations": self.max_scc_iterations,
             "dispersion": self.dispersion,
             "dispersion_params": self.dispersion_params,
+            "range_separated": self.range_separated,
+            "mixer": self.mixer,
+            "filling": self.filling,
+            "read_initial_charges": self.read_initial_charges,
             "numcores": self.numcores_qm,
             "printlevel": 2
         }
