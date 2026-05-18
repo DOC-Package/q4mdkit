@@ -210,7 +210,7 @@ def main():
     print(f"  {n_seg} segments used")
     
     # Compute spectral densities
-    nu_out = np.linspace(1, nu_max, 500)
+    nu_out = np.linspace(1, nu_max, 5000)
     
     print(f"\nComputing spectral densities...")
     SD_J = correlation_to_spectral_density(t_corr, C_J, nu_out, T)

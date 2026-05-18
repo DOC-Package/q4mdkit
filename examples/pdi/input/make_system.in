@@ -1,0 +1,21 @@
+source leaprc.gaff2
+
+# Solute
+PDI = loadmol2 ../input-sub/pdi_gaff2.mol2
+loadamberparams ../input-sub/pdi_gaff2.frcmod
+
+# Solvent
+ACE = loadmol2 ../../solvent/acetonitrile/acetonitrile_gaff2.mol2
+loadamberparams ../../solvent/acetonitrile/acetonitrile_gaff2.frcmod
+
+# System
+SYS = loadpdb pdi_acetonitrile.pdb
+
+# Box
+set SYS box {34.8 34.8 34.8}
+
+check SYS
+
+saveAmberParm SYS pdi_acetonitrile.prmtop pdi_acetonitrile.inpcrd
+savePDB SYS pdi_acetonitrile_leap.pdb
+quit

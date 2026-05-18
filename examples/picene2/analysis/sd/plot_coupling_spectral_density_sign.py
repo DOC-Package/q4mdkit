@@ -1,13 +1,8 @@
 #!/usr/bin/env python3
 """
-Plot local energy spectral densities on the same figure.
+Plot coupling (J) spectral density.
 
 Based on analyze_cdftbci_spectral.py and calc_spectral_density_diff.py
-
-Plots:
-- Average local energy (E_1 + E_2) / 2 from CDFTB-CI
-- Total energy difference from energy_diff.dat
-- Electrostatic contribution from energy_diff_elstat.dat
 """
 
 import numpy as np
@@ -29,36 +24,12 @@ two_pi_c = 2 * np.pi * c_cm_fs  # rad·cm/fs
 Ha_to_cm = 219474.63  # cm⁻¹/Ha
 cm_to_eV = 1.23984e-4  # eV/cm⁻¹
 cm_to_meV = cm_to_eV * 1000
+meV_to_cm = 8.0655  # cm⁻¹/meV
 
 
 # =============================================================================
 # File I/O
 # =============================================================================
-def read_energy_diff(filepath: str) -> dict:
-    """Read energy_diff*.dat file."""
-    frames = []
-    times = []
-    delta_epsilon = []
-    
-    with open(filepath, 'r') as f:
-        for line in f:
-            line = line.strip()
-            if not line or line.startswith('#'):
-                continue
-            
-            parts = line.split()
-            if len(parts) >= 4:
-                frames.append(int(parts[0]))
-                times.append(float(parts[1]))
-                delta_epsilon.append(float(parts[2]))  # dE(a.u.) column
-    
-    return {
-        'frame': np.array(frames),
-        'time': np.array(times),
-        'delta_epsilon': np.array(delta_epsilon),  # Ha
-    }
-
-
 def read_cdftbci_extracted(filepath: str) -> dict:
     """Read cdftbci_extracted.dat file."""
     frames = []
@@ -80,7 +51,7 @@ def read_cdftbci_extracted(filepath: str) -> dict:
                 J_val = float(parts[2]) if parts[2].lower() != 'nan' else np.nan
                 dE1_val = float(parts[3]) if parts[3].lower() != 'nan' else np.nan
                 dE2_val = float(parts[4]) if parts[4].lower() != 'nan' else np.nan
-                J_list.append(np.abs(J_val))
+                J_list.append(J_val)
                 dE1_list.append(dE1_val)
                 dE2_list.append(dE2_val)
     
@@ -111,7 +82,7 @@ def read_cdftbci_extracted(filepath: str) -> dict:
     return {
         'frame': np.array(frames),
         'time': np.array(times),
-        'J': J_arr,
+        'J': J_arr,      # meV (raw value)
         'dE1': dE1_arr,  # Ha
         'dE2': dE2_arr,  # Ha
     }
@@ -163,7 +134,7 @@ def compute_correlation_segmented(delta: np.ndarray, dt: float,
 # =============================================================================
 def correlation_to_spectral_density(t_corr: np.ndarray, C: np.ndarray, 
                                      nu_out: np.ndarray, T: float,
-                                     use_window: bool = False) -> np.ndarray:
+                                     use_window: bool = True) -> np.ndarray:
     """
     Compute spectral density from correlation function.
     J(ν̃) = (2πc ν̃ / k_B T) ∫_0^∞ dt C_cl(t) cos(2πc ν̃ t)
@@ -196,182 +167,135 @@ def main():
     T = 300.0  # K
     dt = 4.0   # fs
     segment_ps = 100.0
-    corr_ps = 8.0
+    corr_ps_J = 50.0  # Longer correlation for J (slower dynamics)
     nu_max = 2000  # cm⁻¹
     
     script_dir = Path(__file__).parent
     cdftbci_file = script_dir / 'cdftbci_extracted.dat'
-    energy_diff_file = script_dir / 'energy_diff.dat'
-    energy_diff_elstat_file = script_dir / 'energy_diff_elstat.dat'
     
     print("=" * 70)
-    print("Local Energy Spectral Density Analysis")
+    print("Coupling (J) Spectral Density Analysis")
     print("=" * 70)
     
     # Read CDFTB-CI data
     print(f"\nReading {cdftbci_file}...")
     data = read_cdftbci_extracted(cdftbci_file)
     
-    # Read energy_diff data
-    print(f"Reading {energy_diff_file}...")
-    data_total = read_energy_diff(energy_diff_file)
-    
-    print(f"Reading {energy_diff_elstat_file}...")
-    data_elstat = read_energy_diff(energy_diff_elstat_file)
-    
-    # Match data lengths
-    N = min(len(data['frame']), len(data_total['frame']), len(data_elstat['frame']))
+    N = len(data['frame'])
     total_time_ps = N * dt / 1000
     
     print(f"\n  Total frames: {N}")
     print(f"  Time step: {dt} fs")
     print(f"  Total time: {total_time_ps:.2f} ps")
     
-    # Convert to cm⁻¹
-    dE1_cm = data['dE1'][:N] * Ha_to_cm
-    dE2_cm = data['dE2'][:N] * Ha_to_cm
-    
-    # Energy differences from MM calculations
-    eps_total_cm = data_total['delta_epsilon'][:N] * Ha_to_cm
-    eps_elstat_cm = data_elstat['delta_epsilon'][:N] * Ha_to_cm
+    # Convert J to cm⁻¹
+    J_cm = data['J'] * meV_to_cm  # meV -> cm⁻¹
     
     # Compute fluctuations
-    delta_dE1 = dE1_cm - np.mean(dE1_cm)
-    delta_dE2 = dE2_cm - np.mean(dE2_cm)
-    delta_total = eps_total_cm - np.mean(eps_total_cm)
-    delta_elstat = eps_elstat_cm - np.mean(eps_elstat_cm)
+    delta_J = J_cm - np.mean(J_cm)
     
     print(f"\nStatistics:")
-    print(f"  E₁:      mean = {np.mean(dE1_cm)*cm_to_eV:.4f} eV, std = {np.std(delta_dE1)*cm_to_meV:.2f} meV")
-    print(f"  E₂:      mean = {np.mean(dE2_cm)*cm_to_eV:.4f} eV, std = {np.std(delta_dE2)*cm_to_meV:.2f} meV")
-    print(f"  Total:   mean = {np.mean(eps_total_cm)*cm_to_eV:.4f} eV, std = {np.std(delta_total)*cm_to_meV:.2f} meV")
-    print(f"  Elstat:  mean = {np.mean(eps_elstat_cm)*cm_to_eV:.4f} eV, std = {np.std(delta_elstat)*cm_to_meV:.2f} meV")
+    print(f"  J: mean = {np.mean(data['J']):.2f} meV, std = {np.std(data['J']):.2f} meV")
     
     # Compute correlation functions
     segment_length = int(segment_ps * 1000 / dt)
-    corr_length = int(corr_ps * 1000 / dt)
+    corr_length = int(corr_ps_J * 1000 / dt)
     
     print(f"\nComputing correlation functions...")
     print(f"  Segment length: {segment_ps} ps ({segment_length} frames)")
-    print(f"  Correlation length: {corr_ps} ps ({corr_length} frames)")
+    print(f"  Correlation length: {corr_ps_J} ps ({corr_length} frames)")
     
-    t_corr, C_dE1, n_seg = compute_correlation_segmented(delta_dE1, dt, segment_length, corr_length)
-    _, C_dE2, _ = compute_correlation_segmented(delta_dE2, dt, segment_length, corr_length)
-    _, C_total, _ = compute_correlation_segmented(delta_total, dt, segment_length, corr_length)
-    _, C_elstat, _ = compute_correlation_segmented(delta_elstat, dt, segment_length, corr_length)
+    t_corr, C_J, n_seg = compute_correlation_segmented(delta_J, dt, segment_length, corr_length)
     
     print(f"  {n_seg} segments used")
     
     # Compute spectral densities
-    nu_out = np.linspace(1, nu_max, 5000)
+    nu_out = np.linspace(1, nu_max, 500)
     
     print(f"\nComputing spectral densities...")
-    SD_dE1 = correlation_to_spectral_density(t_corr, C_dE1, nu_out, T)
-    SD_dE2 = correlation_to_spectral_density(t_corr, C_dE2, nu_out, T)
-    SD_total = correlation_to_spectral_density(t_corr, C_total, nu_out, T)
-    SD_elstat = correlation_to_spectral_density(t_corr, C_elstat, nu_out, T)
+    SD_J = correlation_to_spectral_density(t_corr, C_J, nu_out, T)
     
     # Reorganization energies
     kBT = kB_cm * T
-    lambda_dE1 = C_dE1[0] / (2 * kBT)
-    lambda_dE2 = C_dE2[0] / (2 * kBT)
-    lambda_total = C_total[0] / (2 * kBT)
-    lambda_elstat = C_elstat[0] / (2 * kBT)
+    lambda_J = C_J[0] / (2 * kBT)
     
     print(f"\nReorganization energies:")
-    print(f"  λ_E₁     = {lambda_dE1:.2f} cm⁻¹ = {lambda_dE1*cm_to_meV:.2f} meV")
-    print(f"  λ_E₂     = {lambda_dE2:.2f} cm⁻¹ = {lambda_dE2*cm_to_meV:.2f} meV")
-    print(f"  λ_total  = {lambda_total:.2f} cm⁻¹ = {lambda_total*cm_to_meV:.2f} meV")
-    print(f"  λ_elstat = {lambda_elstat:.2f} cm⁻¹ = {lambda_elstat*cm_to_meV:.2f} meV")
+    print(f"  λ_J = {lambda_J:.2f} cm⁻¹ = {lambda_J*cm_to_meV:.2f} meV")
     
     # ==========================================================================
-    # Plot: All spectral densities on the same figure
+    # Plot 1: Coupling spectral density
     # ==========================================================================
     fig, ax = plt.subplots(figsize=(10, 6))
     
-    # Plot in meV with different line styles for visibility
-    ax.plot(nu_out, SD_dE1 * cm_to_meV, 'r-', linewidth=2, 
-            label=f'$E_I$ (λ = {lambda_dE1*cm_to_meV:.2f} meV)')
-    ax.plot(nu_out, SD_dE2 * cm_to_meV, 'b--', linewidth=2, 
-            label=f'$E_J$ (λ = {lambda_dE2*cm_to_meV:.2f} meV)')
-    ax.plot(nu_out, SD_total * cm_to_meV, 'k:', linewidth=2.5, 
-            label=f'Single total (λ = {lambda_total*cm_to_meV:.2f} meV)')
-    ax.plot(nu_out, SD_elstat * cm_to_meV, 'g-.', linewidth=2, 
-            label=f'Single electrostatic (λ = {lambda_elstat*cm_to_meV:.2f} meV)')
+    ax.plot(nu_out, SD_J * cm_to_meV, 'r-', linewidth=2, 
+            label=f'$J$ (λ = {lambda_J*cm_to_meV:.2f} meV)')
     
-    ax.set_xlabel(r'$\tilde{\nu}$ (cm$^{-1}$)', fontsize=14)
-    ax.set_ylabel(r'$J(\tilde{\nu})$ (meV)', fontsize=14)
-    ax.set_title('Local Energy Spectral Densities', fontsize=16, fontweight='bold')
+    ax.set_xlabel(r'Wavenumber (cm$^{-1}$)', fontsize=14)
+    ax.set_ylabel(r'Spectral Density (meV)', fontsize=14)
+    ax.set_title('Coupling Spectral Density', fontsize=16, fontweight='bold')
     ax.set_xlim(0, nu_max)
     ax.set_ylim(bottom=0)
-    ax.legend(fontsize=11, loc='upper left')
+    ax.legend(fontsize=12, loc='upper right')
     ax.grid(True, alpha=0.3)
     ax.tick_params(axis='both', labelsize=12)
     
     plt.tight_layout()
-    plt.savefig(script_dir / 'local_energy_spectral_densities.png', dpi=300, bbox_inches='tight')
-    plt.savefig(script_dir / 'local_energy_spectral_densities.pdf', bbox_inches='tight')
-    print(f"\nFigures saved: local_energy_spectral_densities.png, .pdf")
+    plt.savefig(script_dir / 'coupling_spectral_density.png', dpi=300, bbox_inches='tight')
+    plt.savefig(script_dir / 'coupling_spectral_density.pdf', bbox_inches='tight')
+    print(f"\nFigures saved: coupling_spectral_density.png, .pdf")
     plt.close()
     
     # ==========================================================================
-    # Additional plot: With correlation functions
+    # Plot 2: Correlation function and spectral density
     # ==========================================================================
     fig, axes = plt.subplots(1, 2, figsize=(14, 5))
     
-    # Correlation functions
+    # Correlation function
     ax = axes[0]
     cm2_to_meV2 = cm_to_meV ** 2
-    ax.plot(t_corr / 1000, C_dE1 * cm2_to_meV2, 'r-', linewidth=2, label='$E_I$')
-    ax.plot(t_corr / 1000, C_dE2 * cm2_to_meV2, 'b--', linewidth=2, label='$E_J$')
-    ax.plot(t_corr / 1000, C_total * cm2_to_meV2, 'k:', linewidth=2.5, label='Single total')
-    ax.plot(t_corr / 1000, C_elstat * cm2_to_meV2, 'g-.', linewidth=2, label='Single electrostatic')
-    ax.set_xlabel('Time (ps)', fontsize=16)
-    ax.set_ylabel(r'Autocorrelation Function (meV$^2$)', fontsize=16)
-    #ax.set_title('Autocorrelation Functions', fontsize=16, fontweight='bold')
-    ax.set_xlim(0, corr_ps)
+    ax.plot(t_corr / 1000, C_J * cm2_to_meV2, 'r-', linewidth=2, label='$J$')
+    ax.set_xlabel('Time (ps)', fontsize=14)
+    ax.set_ylabel(r'Autocorrelation Function (meV$^2$)', fontsize=14)
+    #ax.set_title('Autocorrelation Function', fontsize=14, fontweight='bold')
+    ax.set_xlim(0, corr_ps_J)
     ax.axhline(0, color='gray', linestyle='--', linewidth=0.5)
-    ax.legend(fontsize=16, loc='upper left')
+    #ax.legend(fontsize=11)
     ax.grid(True, alpha=0.3)
-    ax.tick_params(axis='both', labelsize=16)
-    ax.text(0.95, 0.95, '(a)', transform=ax.transAxes, fontsize=16, fontweight='bold',
+    ax.tick_params(axis='both', labelsize=12)
+    ax.text(0.95, 0.95, '(a)', transform=ax.transAxes, fontsize=14, fontweight='bold',
             verticalalignment='top', horizontalalignment='right')
     
-    # Spectral densities
+    # Spectral density
     ax = axes[1]
-    ax.plot(nu_out, SD_dE1 * cm_to_meV, 'r-', linewidth=2, label='$E_I$')
-    ax.plot(nu_out, SD_dE2 * cm_to_meV, 'b--', linewidth=2, label='$E_J$')
-    ax.plot(nu_out, SD_total * cm_to_meV, 'k:', linewidth=2.5, label='Single total')
-    ax.plot(nu_out, SD_elstat * cm_to_meV, 'g-.', linewidth=2, label='Single electrostatic')
+    ax.plot(nu_out, SD_J * cm_to_meV, 'r-', linewidth=2, label='$J$')
     ax.set_xlabel(r'Wavenumber (cm$^{-1}$)', fontsize=16)
     ax.set_ylabel(r'Spectral Density (meV)', fontsize=16)
-    #ax.set_title('Spectral Densities', fontsize=14, fontweight='bold')
+    #ax.set_title('Spectral Density', fontsize=16, fontweight='bold')
     ax.set_xlim(0, nu_max)
     ax.set_ylim(bottom=0)
-    ax.legend(fontsize=16, loc='upper left')
+    #ax.legend(fontsize=16)
     ax.grid(True, alpha=0.3)
     ax.tick_params(axis='both', labelsize=16)
     ax.text(0.95, 0.95, '(b)', transform=ax.transAxes, fontsize=16, fontweight='bold',
             verticalalignment='top', horizontalalignment='right')
     
     plt.tight_layout()
-    plt.savefig(script_dir / 'local_energy_analysis.png', dpi=300, bbox_inches='tight')
-    plt.savefig(script_dir / 'local_energy_analysis.pdf', bbox_inches='tight')
-    print(f"Figures saved: local_energy_analysis.png, .pdf")
+    plt.savefig(script_dir / 'coupling_analysis.png', dpi=300, bbox_inches='tight')
+    plt.savefig(script_dir / 'coupling_analysis.pdf', bbox_inches='tight')
+    print(f"Figures saved: coupling_analysis.png, .pdf")
     plt.close()
     
     # Save data
-    output_file = script_dir / 'local_energy_spectral_densities.dat'
+    output_file = script_dir / 'coupling_spectral_density.dat'
     with open(output_file, 'w') as f:
-        f.write("# Local Energy Spectral Densities\n")
+        f.write("# Coupling Spectral Density\n")
         f.write(f"# Temperature: {T} K\n")
-        f.write(f"# λ_EI = {lambda_dE1*cm_to_meV:.4f} meV\n")
-        f.write(f"# λ_EJ = {lambda_dE2*cm_to_meV:.4f} meV\n")
-        f.write(f"# λ_total = {lambda_total*cm_to_meV:.4f} meV\n")
-        f.write(f"# λ_elstat = {lambda_elstat*cm_to_meV:.4f} meV\n")
-        f.write("# nu(cm-1)  SD_EI(meV)  SD_EJ(meV)  SD_total(meV)  SD_elstat(meV)\n")
+        f.write(f"# λ_J = {lambda_J*cm_to_meV:.4f} meV\n")
+        f.write(f"# J mean = {np.mean(data['J']):.2f} meV\n")
+        f.write(f"# J std = {np.std(data['J']):.2f} meV\n")
+        f.write("# nu(cm-1)  SD_J(meV)\n")
         for i in range(len(nu_out)):
-            f.write(f"{nu_out[i]:10.2f} {SD_dE1[i]*cm_to_meV:14.6e} {SD_dE2[i]*cm_to_meV:14.6e} {SD_total[i]*cm_to_meV:14.6e} {SD_elstat[i]*cm_to_meV:14.6e}\n")
+            f.write(f"{nu_out[i]:10.2f} {SD_J[i]*cm_to_meV:14.6e}\n")
     print(f"Data saved: {output_file}")
     
     print("\n" + "=" * 70)
