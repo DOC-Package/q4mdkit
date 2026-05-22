@@ -49,6 +49,21 @@ dftb:
   #   s6: 1.0
   #   s8: 3.209
   dispersion_params: null
+  # SCC mixer settings (optional)
+  # method: Broyden | Anderson | Simple | DIIS
+  # Example:
+  #   mixer:
+  #     method: Broyden
+  #     params:
+  #       MixingParameter: 0.05
+  mixer: null
+  # Filling / electron smearing (optional)
+  # Example:
+  #   filling:
+  #     method: Fermi
+  #     params:
+  #       "Temperature [K]": 1000
+  filling: null
   # SCC error logging (extract from detailed.out at each MD step)
   scc_log_enabled: false   # Enable SCC convergence logging
   scc_logfile: "scc_error.dat"  # Output file for SCC error log

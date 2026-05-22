@@ -112,7 +112,7 @@ H     30.548333349778  36.346782233361  28.130056346949
    Exponent = 4.0
   }
   Scc = Yes
-  MaxSCCIterations = 500
+  MaxSCCIterations = 300
   ThirdOrderFull = Yes
   ThirdOrder = No
   HubbardDerivs {

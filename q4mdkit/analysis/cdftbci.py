@@ -898,10 +898,39 @@ def load_unrestricted_orbital_data(
 import dftbplus
 import hsd
 import mdtraj as md
+import re
 import shutil
 import yaml
 from dataclasses import field
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Tuple as _Tuple
+
+
+_SCC_LINE_RE = re.compile(
+    r"^\s*(\d+)\s+([-+]?\d+\.\d+E[+-]\d+)\s+([-+]?\d+\.\d+E[+-]\d+)\s+([-+]?\d+\.\d+E[+-]\d+)\s*$",
+    re.M,
+)
+
+
+def _read_scc_from_detailed(detailed_path: Path) -> Optional[_Tuple[int, float]]:
+    """Extract last (iSCC, SCC_error) from a DFTB+ detailed.out file.
+
+    Returns None if file missing or no SCC convergence line found.
+    """
+    p = Path(detailed_path)
+    if not p.exists():
+        return None
+    try:
+        txt = p.read_text(errors="ignore")
+    except Exception:
+        return None
+    matches = _SCC_LINE_RE.findall(txt)
+    if not matches:
+        return None
+    iSCC, _, _, err = matches[-1]
+    try:
+        return int(iSCC), float(err)
+    except ValueError:
+        return None
 
 from .cdftb import (
     CDFTBConfig,
@@ -927,6 +956,25 @@ from .cdftb_result_reader import (
 )
 
 from .spin import compute_fragment_spin_population
+
+from .phase_tracking import StatePhaseTracker
+
+
+# Default retry strategy used when no `scc.retry` is given in the YAML.
+# Each entry is a dict consumed by `run_cdftb_with_retry`. Keys:
+#   label                  : tag written to retry/SCC logs
+#   use_initial_charges    : None -> follow per-frame policy
+#                            (config.use_previous_charges + frame index);
+#                            True/False -> override
+#   disable_constraint     : drop ElectronicConstraints block
+#   mixing_parameter       : override Broyden MixingParameter
+#   max_scc_iterations     : override MaxSCCIterations
+DEFAULT_RETRY_ATTEMPTS: List[Dict[str, Any]] = [
+    {"label": "first", "use_initial_charges": None},
+    {"label": "mix0.01", "use_initial_charges": True, "mixing_parameter": 0.01, "max_scc_iterations": 500},
+    {"label": "no_init_charges", "use_initial_charges": False, "mixing_parameter": 0.01, "max_scc_iterations": 500},
+    #{"label": "mix0.02", "use_initial_charges": False, "mixing_parameter": 0.02, "max_scc_iterations": 1500},
+]
 
 
 @dataclass
@@ -955,6 +1003,36 @@ class CDFTBCIConfig(CDFTBConfig):
     
     # Use previous frame's charges as initial guess
     use_previous_charges: bool = False
+
+    # SCC convergence logging (iSCC, SCC error per fragment per frame,
+    # including every retry attempt).
+    scc_log_enabled: bool = False
+    scc_log_file: Optional[Path] = None
+
+    # Retry strategy: ordered list of attempt dicts (see DEFAULT_RETRY_ATTEMPTS
+    # for the schema). When None, the default sequence is used.
+    retry_attempts: Optional[List[Dict[str, Any]]] = None
+
+    # Phase (gauge) tracking of diabatic states across MD frames.
+    # When enabled, the sign s_f(t_n) of each charge-localized diabatic
+    # state is chosen so that <Phi_f^corr(t_{n-1}) | Phi_f(t_n)> > 0, and
+    # the coupling and state overlap are corrected as
+    #   H_AB^corr = s_A s_B H_AB,  S_AB^corr = s_A s_B S_AB.
+    phase_tracking_enabled: bool = True
+    # Approximation for the cross-geometry AO overlap S^{n-1,n}:
+    #   "current"  -> S(t_n)                    (default, robust)
+    #   "previous" -> S(t_{n-1})
+    #   "midpoint" -> 0.5 [S(t_{n-1}) + S(t_n)]
+    phase_tracking_cross_overlap_mode: str = "current"
+    # Output file for the phase-tracking diagnostics.
+    phase_output_file: Optional[Path] = None
+    # Warn when |D_raw| < this value (low overlap -> sign tracking unreliable).
+    phase_warn_low_overlap: float = 0.5
+    # Warn when |D_raw| > this value (cross-overlap approx breaking down).
+    phase_warn_high_overlap: float = 1.5
+    # Warn when sign(H_AB_corr) flips between consecutive frames after
+    # gauge correction (possible genuine diabatic crossing OR tracker miss).
+    phase_warn_post_correction_flip: bool = True
 
 
 def load_cdftbci_config(config_path: Path) -> CDFTBCIConfig:
@@ -1036,10 +1114,43 @@ def load_cdftbci_config(config_path: Path) -> CDFTBCIConfig:
     ci_N_B = ci_cfg.get('N_B', 101.0)
     ci_M_A = ci_cfg.get('M_A', 0.0)  # Spin constraint target for A
     ci_M_B = ci_cfg.get('M_B', 0.0)  # Spin constraint target for B
+
+    # Phase tracking settings
+    phase_cfg = data.get('phase_tracking', {})
+    phase_tracking_enabled = phase_cfg.get('enabled', True)
+    phase_tracking_cross_overlap_mode = phase_cfg.get('cross_overlap_mode', 'current')
+    phase_warn_low_overlap = float(phase_cfg.get('warn_low_overlap', 0.5))
+    phase_warn_high_overlap = float(phase_cfg.get('warn_high_overlap', 1.5))
+    phase_warn_post_correction_flip = bool(phase_cfg.get('warn_post_correction_flip', True))
     
     # Parse SCC settings
     scc_cfg = data.get('scc', {})
     use_previous_charges = scc_cfg.get('use_previous_charges', False)
+    scc_log_enabled = bool(scc_cfg.get('log_enabled', False))
+    scc_log_filename = scc_cfg.get('logfile', 'scc_error.dat')
+
+    # Parse retry strategy. Accepts either a list of dicts, or None/missing
+    # (use DEFAULT_RETRY_ATTEMPTS).
+    retry_cfg = scc_cfg.get('retry', None)
+    if retry_cfg is None:
+        retry_attempts = None
+    else:
+        if not isinstance(retry_cfg, list) or len(retry_cfg) == 0:
+            raise ValueError("scc.retry must be a non-empty list of attempt dicts")
+        retry_attempts = []
+        for i, item in enumerate(retry_cfg):
+            if not isinstance(item, dict):
+                raise ValueError(f"scc.retry[{i}] must be a mapping")
+            retry_attempts.append({
+                "label": str(item.get("label", f"attempt{i}")),
+                "use_initial_charges": item.get("use_initial_charges", None),
+                "disable_constraint": bool(item.get("disable_constraint", False)),
+                "mixing_parameter": item.get("mixing_parameter", None),
+                "max_scc_iterations": item.get("max_scc_iterations", None),
+                "mixer": item.get("mixer", None),
+                "optimiser": item.get("optimiser", None),
+                "max_constr_iterations": item.get("max_constr_iterations", None),
+            })
     
     # CI output files
     ci_output_file = output_dir / output_cfg.get('ci_file', 'cdftbci.dat')
@@ -1050,6 +1161,12 @@ def load_cdftbci_config(config_path: Path) -> CDFTBCIConfig:
     
     # Retry log file
     retry_log_file = output_dir / output_cfg.get('retry_log_file', 'retry_log.dat')
+
+    # SCC convergence log file
+    scc_log_file = output_dir / scc_log_filename
+
+    # Phase tracking output file
+    phase_output_file = output_dir / output_cfg.get('phase_file', 'cdftbci_phase.dat')
     
     return CDFTBCIConfig(
         traj_path=traj_path,
@@ -1080,6 +1197,15 @@ def load_cdftbci_config(config_path: Path) -> CDFTBCIConfig:
         spin_output_file=spin_output_file,
         retry_log_file=retry_log_file,
         use_previous_charges=use_previous_charges,
+        scc_log_enabled=scc_log_enabled,
+        scc_log_file=scc_log_file,
+        retry_attempts=retry_attempts,
+        phase_tracking_enabled=phase_tracking_enabled,
+        phase_tracking_cross_overlap_mode=phase_tracking_cross_overlap_mode,
+        phase_output_file=phase_output_file,
+        phase_warn_low_overlap=phase_warn_low_overlap,
+        phase_warn_high_overlap=phase_warn_high_overlap,
+        phase_warn_post_correction_flip=phase_warn_post_correction_flip,
     )
 
 
@@ -1118,10 +1244,13 @@ def setup_fragment_work_directory(
     disable_constraint: bool = False,
     mixing_parameter: Optional[float] = None,
     max_scc_iterations: Optional[int] = None,
+    mixer: Optional[Dict[str, Any]] = None,
+    optimiser: Optional[Dict[str, Any]] = None,
+    max_constr_iterations: Optional[int] = None,
 ) -> Path:
     """
     Set up fragment subdirectory within work directory.
-    
+
     Parameters
     ----------
     work_dir : Path
@@ -1137,9 +1266,33 @@ def setup_fragment_work_directory(
     disable_constraint : bool
         If True, disable the electronic constraint (for fallback calculations).
     mixing_parameter : float, optional
-        Override MixingParameter in SCC block. None means use template value.
+        Override MixingParameter inside whatever Mixer block exists in the
+        template. None means use template value.
     max_scc_iterations : int, optional
-        Override MaxSCCIterations in SCC block. None means use template value.
+        Override MaxSCCIterations. None means use template value.
+    mixer : dict, optional
+        Replace the entire ``Hamiltonian.DFTB.Mixer`` block. Format is the
+        same nested dict that ``hsd`` consumes, e.g.
+
+            {"Anderson": {"MixingParameter": 0.05, "Generations": 4,
+                          "InitMixingParameter": 0.01}}
+            {"Broyden":  {"MixingParameter": 0.05}}
+            {"Simple":   {"MixingParameter": 0.05}}
+
+        ``mixing_parameter`` (if given) is applied AFTER the swap, into the
+        new mixer's parameters.
+    optimiser : dict, optional
+        Replace the entire ``ElectronicConstraints.Optimiser`` block. Format
+        is the same nested dict that ``hsd`` consumes, e.g.
+
+            {"LBFGS": {"Memory": 20}}
+            {"FIRE":  {}}
+            {"SteepestDescent": {}}
+
+        Has no effect when ``disable_constraint`` is True.
+    max_constr_iterations : int, optional
+        Override ``ElectronicConstraints.MaxConstrIterations`` (the outer
+        Lagrange loop cap). None means use template value.
     """
     frag_dir = work_dir / fragment_name
     frag_dir.mkdir(parents=True, exist_ok=True)
@@ -1192,13 +1345,29 @@ def setup_fragment_work_directory(
                 del spin_pol['Colinear']['InitialSpins']
     
     # Override SCC parameters if specified
+    # Replace the entire Mixer block first (e.g., Broyden -> Anderson) so
+    # that a subsequent mixing_parameter override targets the new mixer.
+    if mixer is not None:
+        data['Hamiltonian']['DFTB']['Mixer'] = dict(mixer)
     if mixing_parameter is not None:
         if 'Mixer' in data['Hamiltonian']['DFTB']:
-            mixer = data['Hamiltonian']['DFTB']['Mixer']
-            if 'Broyden' in mixer:
-                mixer['Broyden']['MixingParameter'] = mixing_parameter
+            mixer_block = data['Hamiltonian']['DFTB']['Mixer']
+            # Update MixingParameter inside whichever scheme is active.
+            for scheme in ('Broyden', 'Anderson', 'Simple', 'DIIS'):
+                if scheme in mixer_block and isinstance(mixer_block[scheme], dict):
+                    mixer_block[scheme]['MixingParameter'] = mixing_parameter
+                    break
     if max_scc_iterations is not None:
         data['Hamiltonian']['DFTB']['MaxSCCIterations'] = max_scc_iterations
+
+    # Override constraint-loop parameters (only meaningful when constraint
+    # block is still present, i.e. disable_constraint is False).
+    ec = data['Hamiltonian']['DFTB'].get('ElectronicConstraints')
+    if isinstance(ec, dict):
+        if optimiser is not None:
+            ec['Optimiser'] = dict(optimiser)
+        if max_constr_iterations is not None:
+            ec['MaxConstrIterations'] = max_constr_iterations
     
     # Save modified HSD
     hsd_file = frag_dir / "dftb_in.hsd"
@@ -1225,7 +1394,15 @@ def compute_cdftbci_for_frame(
     N_B: float,
     M_A: float = 0.0,
     M_B: float = 0.0,
-) -> Tuple[Optional[UnrestrictedCDFTBCIHamiltonian], Optional[float], Optional[float], Optional[str]]:
+) -> Tuple[
+    Optional[UnrestrictedCDFTBCIHamiltonian],
+    Optional[float],
+    Optional[float],
+    Optional[str],
+    Optional[UnrestrictedOrbitalData],
+    Optional[UnrestrictedOrbitalData],
+    Optional[np.ndarray],
+]:
     """
     Compute CDFTB-CI quantities for current frame using data in work directory.
     
@@ -1329,13 +1506,13 @@ def compute_cdftbci_for_frame(
         # Compute transfer integrals
         J_direct = compute_transfer_integral_unrestricted(ham.H, ham.S, method="direct")
         J_lowdin = compute_transfer_integral_unrestricted(ham.H, ham.S, method="lowdin")
-        
-        return ham, J_direct, J_lowdin, None
-        
+
+        return ham, J_direct, J_lowdin, None, orb_A, orb_B, S_AO
+
     except Exception as e:
         import traceback
         error_msg = f"{str(e)}\n{traceback.format_exc()}"
-        return None, None, None, error_msg
+        return None, None, None, error_msg, None, None, None
 
 
 def compute_spin_for_fragment(
@@ -1389,16 +1566,19 @@ def run_cdftb_with_retry(
     timeout: int,
     use_initial_charges: bool,
     ci_enabled: bool,
-) -> Tuple[float, List[float], bool, str]:
+    retry_attempts: Optional[List[Dict[str, Any]]] = None,
+) -> Tuple[float, List[float], bool, str, List[_Tuple[str, Optional[int], Optional[float]]]]:
     """
     Run CDFTB calculation with automatic retry on convergence failure.
-    
-    Retry strategy:
-    1. First attempt: Run with specified initial charges setting
-    2. If failed: Run without reading initial charges
-    3. If failed: Run without initial charges + MixingParameter=0.05 + MaxSCCIterations=1000
-    4. If failed: Run without initial charges + MixingParameter=0.02 + MaxSCCIterations=1500
-    
+
+    Retry strategy is configurable via ``retry_attempts``. If not given, the
+    default sequence is used (kept for backward compatibility):
+
+    1. ``first``           : Run with ``use_initial_charges`` as passed in
+    2. ``no_init_charges`` : Force ``ReadInitialCharges = No``
+    3. ``mix0.05``         : ``MixingParameter=0.05``, ``MaxSCCIterations=1000``
+    4. ``mix0.02``         : ``MixingParameter=0.02``, ``MaxSCCIterations=1500``
+
     Parameters
     ----------
     work_dir : Path
@@ -1416,10 +1596,31 @@ def run_cdftb_with_retry(
     timeout : int
         Timeout in seconds.
     use_initial_charges : bool
-        Whether to read initial charges for first attempt.
+        Default policy for ``ReadInitialCharges`` (used when an attempt sets
+        ``use_initial_charges = None`` / "auto").
     ci_enabled : bool
-        Whether CDFTB-CI is enabled (determines if WriteHS is needed).
-        
+        Whether CDFTB-CI is enabled (kept for API compatibility).
+    retry_attempts : list of dict, optional
+        Ordered list of attempts. Each entry supports the keys:
+
+        - ``label`` (str)                 : tag written to the SCC/retry logs
+        - ``use_initial_charges`` (bool or None) : None = follow the
+          ``use_initial_charges`` argument; True/False overrides it
+        - ``disable_constraint`` (bool)   : drop ``ElectronicConstraints``
+        - ``mixing_parameter`` (float or None) : override MixingParameter
+          inside whichever Mixer block is active
+        - ``max_scc_iterations`` (int or None) : override
+          ``Hamiltonian.DFTB.MaxSCCIterations``
+        - ``mixer`` (dict or None)        : replace the whole
+          ``Hamiltonian.DFTB.Mixer`` block, e.g.
+          ``{"Anderson": {"MixingParameter": 0.05, "Generations": 4}}``
+        - ``optimiser`` (dict or None)    : replace the whole
+          ``ElectronicConstraints.Optimiser`` block, e.g.
+          ``{"LBFGS": {"Memory": 20}}``, ``{"FIRE": {}}``,
+          ``{"SteepestDescent": {}}``
+        - ``max_constr_iterations`` (int or None) : override
+          ``ElectronicConstraints.MaxConstrIterations`` (outer Lagrange loop)
+
     Returns
     -------
     energy : float
@@ -1429,94 +1630,75 @@ def run_cdftb_with_retry(
     success : bool
         Whether calculation succeeded.
     retry_info : str
-        Information about retry attempts ("", "no_init_charges", "mix0.05", "mix0.02", "all_failed:...").
+        ``""`` if the very first attempt succeeded, otherwise the label of the
+        successful attempt, or ``"all_failed:<error>"``.
+    scc_attempts : list of tuple
+        List of ``(attempt_label, iSCC, scc_error, status)`` for every
+        attempt that produced a detailed.out. ``iSCC`` / ``scc_error`` may be
+        ``None`` if detailed.out could not be parsed. ``status`` is ``"ok"``
+        for a successful attempt, otherwise the error message returned by
+        the DFTB+ subprocess (e.g. ``"Process crashed with exit code 1"``,
+        ``"Timeout"``).
     """
+    if retry_attempts is None:
+        retry_attempts = DEFAULT_RETRY_ATTEMPTS
+
     frag_dir = work_dir / frag.name
-    retry_info = ""
-    
-    # First attempt: normal CDFTB
-    frag_dir = setup_fragment_work_directory(
-        work_dir, frag.name, frag.atom_range, hsd_template,
-        read_initial_charges=use_initial_charges
-    )
-    
-    energy, mcharge, error = run_dftb_in_subprocess(
-        qm_coords_bohr, frag_dir, write_hs=False,
-        dftb_library_path=dftb_library_path,
-        num_threads=num_threads,
-        timeout=timeout
-    )
-    
-    if error is None:
-        # Success on first attempt
-        return energy, mcharge, True, retry_info
-    
-    # Second attempt: Run with constraint but without reading initial charges
-    print(f"    [Retry] First attempt failed ({error[:50]}...), trying without initial charges")
-    
-    frag_dir = setup_fragment_work_directory(
-        work_dir, frag.name, frag.atom_range, hsd_template,
-        read_initial_charges=False,
-        disable_constraint=False
-    )
-    
-    energy, mcharge, error = run_dftb_in_subprocess(
-        qm_coords_bohr, frag_dir, write_hs=False,
-        dftb_library_path=dftb_library_path,
-        num_threads=num_threads,
-        timeout=timeout
-    )
-    
-    if error is None:
-        retry_info = "no_init_charges"
-        return energy, mcharge, True, retry_info
-    
-    # Third attempt: MixingParameter=0.05, MaxSCCIterations=1000
-    print(f"    [Retry] Second attempt failed, trying with MixingParameter=0.05")
-    
-    frag_dir = setup_fragment_work_directory(
-        work_dir, frag.name, frag.atom_range, hsd_template,
-        read_initial_charges=False,
-        disable_constraint=False,
-        mixing_parameter=0.05,
-        max_scc_iterations=1000
-    )
-    
-    energy, mcharge, error = run_dftb_in_subprocess(
-        qm_coords_bohr, frag_dir, write_hs=False,
-        dftb_library_path=dftb_library_path,
-        num_threads=num_threads,
-        timeout=timeout
-    )
-    
-    if error is None:
-        retry_info = "mix0.05"
-        return energy, mcharge, True, retry_info
-    
-    # Fourth attempt: MixingParameter=0.02, MaxSCCIterations=1500
-    print(f"    [Retry] Third attempt failed, trying with MixingParameter=0.02")
-    
-    frag_dir = setup_fragment_work_directory(
-        work_dir, frag.name, frag.atom_range, hsd_template,
-        read_initial_charges=False,
-        disable_constraint=False,
-        mixing_parameter=0.02,
-        max_scc_iterations=1500
-    )
-    
-    energy, mcharge, error = run_dftb_in_subprocess(
-        qm_coords_bohr, frag_dir, write_hs=False,
-        dftb_library_path=dftb_library_path,
-        num_threads=num_threads,
-        timeout=timeout
-    )
-    
-    if error is None:
-        retry_info = "mix0.02"
-        return energy, mcharge, True, retry_info
-    
+    scc_attempts: list = []
+
+    def _record(label: str, err_msg: Optional[str]) -> None:
+        info = _read_scc_from_detailed(frag_dir / "detailed.out")
+        status = "ok" if err_msg is None else err_msg
+        if info is None:
+            scc_attempts.append((label, None, None, status))
+        else:
+            scc_attempts.append((label, info[0], info[1], status))
+
+    last_error = "no attempts configured"
+    for idx, attempt in enumerate(retry_attempts):
+        label = str(attempt.get("label", f"attempt{idx}"))
+        a_use_init = attempt.get("use_initial_charges", None)
+        if a_use_init is None:
+            read_init = bool(use_initial_charges)
+        else:
+            read_init = bool(a_use_init)
+        disable_constraint = bool(attempt.get("disable_constraint", False))
+        mixing_parameter = attempt.get("mixing_parameter", None)
+        max_scc_iterations = attempt.get("max_scc_iterations", None)
+        mixer = attempt.get("mixer", None)
+        optimiser = attempt.get("optimiser", None)
+        max_constr_iterations = attempt.get("max_constr_iterations", None)
+
+        if idx > 0:
+            print(f"    [Retry] previous attempt failed, trying '{label}'")
+
+        frag_dir = setup_fragment_work_directory(
+            work_dir, frag.name, frag.atom_range, hsd_template,
+            read_initial_charges=read_init,
+            disable_constraint=disable_constraint,
+            mixing_parameter=mixing_parameter,
+            max_scc_iterations=max_scc_iterations,
+            mixer=mixer,
+            optimiser=optimiser,
+            max_constr_iterations=max_constr_iterations,
+        )
+
+        energy, mcharge, error = run_dftb_in_subprocess(
+            qm_coords_bohr, frag_dir, write_hs=False,
+            dftb_library_path=dftb_library_path,
+            num_threads=num_threads,
+            timeout=timeout,
+        )
+        _record(label, error)
+
+        if error is None:
+            retry_info = "" if idx == 0 else label
+            return energy, mcharge, True, retry_info, scc_attempts
+
+        last_error = error
+
     # All attempts failed
-    return float("nan"), None, False, f"all_failed:{error}"
+    return float("nan"), None, False, f"all_failed:{last_error}", scc_attempts
 
 
 def run_cdftbci_analysis(config_path: Path) -> None:
@@ -1569,10 +1751,43 @@ def run_cdftbci_analysis(config_path: Path) -> None:
         print(f"\nCDFTB-CI settings:")
         print(f"  N_A = {config.ci_N_A}")
         print(f"  N_B = {config.ci_N_B}")
+        if config.phase_tracking_enabled:
+            print(f"  Phase tracking: ENABLED "
+                  f"(cross_overlap_mode = {config.phase_tracking_cross_overlap_mode})")
+        else:
+            print(f"  Phase tracking: DISABLED")
     
     if config.use_previous_charges:
         print(f"\nSCC settings:")
         print(f"  Use previous charges: Yes")
+
+    active_retry = config.retry_attempts if config.retry_attempts is not None else DEFAULT_RETRY_ATTEMPTS
+    print(f"\nRetry strategy ({len(active_retry)} attempt(s)):")
+    for i, a in enumerate(active_retry):
+        parts = []
+        uic = a.get("use_initial_charges", None)
+        parts.append(f"use_init={'auto' if uic is None else uic}")
+        if a.get("disable_constraint"):
+            parts.append("disable_constraint=True")
+        if a.get("mixing_parameter") is not None:
+            parts.append(f"mixing={a['mixing_parameter']}")
+        if a.get("max_scc_iterations") is not None:
+            parts.append(f"maxiter={a['max_scc_iterations']}")
+        if a.get("mixer") is not None:
+            try:
+                scheme = next(iter(a["mixer"].keys()))
+            except Exception:
+                scheme = "?"
+            parts.append(f"mixer={scheme}")
+        if a.get("optimiser") is not None:
+            try:
+                opt = next(iter(a["optimiser"].keys()))
+            except Exception:
+                opt = "?"
+            parts.append(f"optimiser={opt}")
+        if a.get("max_constr_iterations") is not None:
+            parts.append(f"maxconstr={a['max_constr_iterations']}")
+        print(f"  {i+1}. {a.get('label', f'attempt{i}')}: " + ", ".join(parts))
     print()
     
     # Create output directory
@@ -1608,6 +1823,15 @@ def run_cdftbci_analysis(config_path: Path) -> None:
     ci_sub_file = None
     spin_file = None
     retry_log_file = None
+    phase_file = None
+    scc_log_file = None
+    # Pre-initialize phase-tracking warning aggregators so that the `finally`
+    # cleanup block can reference them even if an exception is raised before
+    # the main per-frame loop starts.
+    warn_counts = {"LOW_DA": 0, "LOW_DB": 0,
+                   "HIGH_DA": 0, "HIGH_DB": 0,
+                   "FLIP_HAB": 0}
+    warn_frames: list = []
     
     # Open retry log file
     retry_log_file = open(config.retry_log_file, "w")
@@ -1617,18 +1841,74 @@ def run_cdftbci_analysis(config_path: Path) -> None:
     frag_names = [f.name for f in config.fragments]
     retry_header = "# Frame  Time(fs)  " + "  ".join([f"retry_{name}" for name in frag_names]) + "\n"
     retry_log_file.write(retry_header)
+
+    # Open SCC convergence log file (one row per fragment per attempt)
+    if config.scc_log_enabled:
+        scc_log_file = open(config.scc_log_file, "w")
+        scc_log_file.write("# SCC Convergence Log for CDFTB Calculations\n")
+        scc_log_file.write(
+            "# Note: iSCC / SCC_error are read from the LAST inner-SCC summary in\n"
+            "#       detailed.out. For constrained DFTB this is the inner SCC of\n"
+            "#       the last Lagrange iteration -- it can look small even when the\n"
+            "#       outer constraint loop failed. Check 'status' for the real result.\n"
+        )
+        scc_log_file.write(
+            "# Frame  Time(fs)      fragment             attempt  iSCC  SCC_error(a.u.)  status\n"
+        )
     
     if config.ci_enabled:
         ci_file = open(config.ci_output_file, "w")
         ci_file.write("# CDFTB-CI Results\n")
+        if config.phase_tracking_enabled:
+            ci_file.write("# Columns: H_AB and S_AB are gauge-corrected (s_A*s_B applied).\n")
         ci_file.write("# Frame  Time(fs)   J_lowdin(meV)        E1(Ha)        E2(Ha)        dE(eV)\n")
         
         ci_sub_file = open(config.ci_sub_file, "w")
         ci_sub_file.write("# CDFTB-CI Sub Values\n")
+        if config.phase_tracking_enabled:
+            ci_sub_file.write(
+                "# Gauge-corrected: H_AB, S_AB, S_AB_alpha, S_AB_beta, W_BA, W_AB "
+                "are multiplied by s_A*s_B. Raw values are in cdftbci_phase.dat.\n"
+            )
         ci_sub_file.write("# Frame  Time(fs)      E_A(Ha)      E_B(Ha)        H_AB(Ha)        J_direct(meV)        "
                          "V_A(Ha)        V_B(Ha)      N_A      N_B        S_AB        "
                          "S_AB_alpha      S_AB_beta        W_BA        W_BA_alpha      W_BA_beta        "
                          "W_AB        W_AB_alpha      W_AB_beta\n")
+
+        if config.phase_tracking_enabled:
+            phase_file = open(config.phase_output_file, "w")
+            phase_file.write("# CDFTB-CI Phase (Gauge) Tracking\n")
+            phase_file.write(
+                "# s_A, s_B in {-1,+1}: gauge factors making "
+                "<Phi^corr(t_{n-1})|Phi(t_n)> > 0.\n"
+            )
+            phase_file.write(
+                "# D_A_raw = <Phi_A(t_{n-1})|Phi_A(t_n)> (raw, before applying s_A(t_{n-1})).\n"
+            )
+            phase_file.write(
+                "# D_A_corr = s_A(t_{n-1}) * D_A_raw. Same for B. NaN means tracker reset.\n"
+            )
+            phase_file.write(
+                "# H_AB_raw / S_AB_raw are pre-correction; *_corr = s_A*s_B * raw.\n"
+            )
+            phase_file.write(
+                "# cross_overlap_mode = " + config.phase_tracking_cross_overlap_mode + "\n"
+            )
+            phase_file.write(
+                "# WARN flags:\n"
+                "#   LOW_DA / LOW_DB : |D_raw| below warn_low_overlap "
+                f"({config.phase_warn_low_overlap:.3f}) -> sign tracking may be unreliable.\n"
+                "#   HIGH_DA / HIGH_DB : |D_raw| above warn_high_overlap "
+                f"({config.phase_warn_high_overlap:.3f}) -> cross-overlap approximation breaking down.\n"
+                "#   FLIP_HAB : sign(H_AB_corr) flipped between consecutive frames AFTER "
+                "gauge correction (possible diabatic crossing or tracker miss).\n"
+                "#   OK if no warning.\n"
+            )
+            phase_file.write(
+                "# Frame  Time(fs)  s_A  s_B  gauge        D_A_raw          D_A_corr        "
+                "D_B_raw          D_B_corr        H_AB_raw(Ha)      H_AB_corr(Ha)      "
+                "S_AB_raw          S_AB_corr     flags\n"
+            )
     
     # Always open spin output file (useful even without CI)
     spin_file = open(config.spin_output_file, "w")
@@ -1646,6 +1926,19 @@ def run_cdftbci_analysis(config_path: Path) -> None:
     
     try:
         processed_count = 0
+
+        # Phase trackers for the two charge-localized diabatic states.
+        # On CDFTB failure the previous-frame MOs are simply KEPT as the
+        # phase reference; the next successful frame overwrites them via
+        # tracker.update(). No automatic reset -- a single bad frame does
+        # not break phase continuity. If the cross-frame overlap becomes
+        # too low after many skipped frames, it is reported via
+        # warn_low_overlap.
+        tracker_A = StatePhaseTracker(name="A")
+        tracker_B = StatePhaseTracker(name="B")
+        # Previous frame's gauge-corrected H_AB for post-correction
+        # sign-flip detection (NaN until the first valid frame).
+        prev_H_AB_corr = float("nan")
         
         for frame_id, time_fs, qm_coords_bohr, mm_coords_ang in iter_qm_coordinates(
             config.traj_path, config.topology_path, qm_indices, mm_indices
@@ -1700,12 +1993,33 @@ def run_cdftbci_analysis(config_path: Path) -> None:
                             use_initial_charges = True
                 
                 # Run CDFTB calculation with automatic retry
-                energy, mcharge, success, retry_info = run_cdftb_with_retry(
+                energy, mcharge, success, retry_info, scc_attempts = run_cdftb_with_retry(
                     work_dir, frag, qm_coords_bohr, config.hsd_template,
                     config.dftb_library_path, config.num_threads, config.timeout,
-                    use_initial_charges, config.ci_enabled
+                    use_initial_charges, config.ci_enabled,
+                    retry_attempts=config.retry_attempts,
                 )
                 retry_infos.append(retry_info)
+
+                # Log SCC convergence info for every attempt (including retries)
+                if scc_log_file is not None:
+                    for entry in scc_attempts:
+                        # Backward compat: entry may be 3- or 4-tuple
+                        if len(entry) == 4:
+                            attempt_label, iSCC, scc_err, status = entry
+                        else:
+                            attempt_label, iSCC, scc_err = entry
+                            status = "?"
+                        iSCC_str = f"{iSCC:5d}" if iSCC is not None else "  nan"
+                        err_str = f"{scc_err:.12e}" if scc_err is not None else "nan"
+                        # Compress whitespace in status so the column stays single-token.
+                        status_str = " ".join(str(status).split()) or "?"
+                        scc_log_file.write(
+                            f"{frame_id:5d}  {time_val:12.3f}  "
+                            f"{frag.name:>12s}  {attempt_label:>18s}  "
+                            f"{iSCC_str}  {err_str}  {status_str}\n"
+                        )
+                    scc_log_file.flush()
                 
                 if not success:
                     print(f"  {frag.name}: ERROR - {retry_info}")
@@ -1771,11 +2085,20 @@ def run_cdftbci_analysis(config_path: Path) -> None:
                     ci_file.flush()
                     ci_sub_file.write(f"{frame_id:5d}  {time_val:8.2f}  " + "  ".join(["nan"] * 17) + "\n")
                     ci_sub_file.flush()
+                    # Keep previous-frame MOs in the trackers as the phase
+                    # reference; the next successful frame will overwrite
+                    # them. Just record a SKIP marker in the phase log.
+                    if config.phase_tracking_enabled and phase_file is not None:
+                        phase_file.write(
+                            f"{frame_id:5d}  {time_val:8.2f}  "
+                            + "  ".join(["nan"] * 11) + "  SKIP\n"
+                        )
+                        phase_file.flush()
                 else:
                     E_A = energies[0]
                     E_B = energies[1]
                     
-                    ham, J_direct, J_lowdin, ci_error = compute_cdftbci_for_frame(
+                    ham, J_direct, J_lowdin, ci_error, orb_A_data, orb_B_data, S_AO_data = compute_cdftbci_for_frame(
                         work_dir,
                         config.fragments[0].name,
                         config.fragments[1].name,
@@ -1790,7 +2113,81 @@ def run_cdftbci_analysis(config_path: Path) -> None:
                         ci_file.write(f"{frame_id:5d}  {time_val:8.2f}  {'nan':>12s}  "
                                       f"{'nan':>16s}  {'nan':>16s}  {'nan':>10s}\n")
                         ci_sub_file.write(f"{frame_id:5d}  {time_val:8.2f}  " + "  ".join(["nan"] * 17) + "\n")
+                        if config.phase_tracking_enabled and phase_file is not None:
+                            phase_file.write(
+                                f"{frame_id:5d}  {time_val:8.2f}  "
+                                + "  ".join(["nan"] * 11) + "  SKIP\n"
+                            )
+                            phase_file.flush()
                     else:
+                        # ---- Phase (gauge) tracking --------------------------
+                        H_AB_raw = ham.H_AB
+                        S_AB_raw = ham.S_AB
+                        S_AB_alpha_raw = ham.S_AB_alpha
+                        S_AB_beta_raw = ham.S_AB_beta
+                        W_BA_raw = ham.W_BA
+                        W_AB_raw = ham.W_AB
+                        W_BA_alpha_raw = ham.W_BA_alpha
+                        W_BA_beta_raw = ham.W_BA_beta
+                        W_AB_alpha_raw = ham.W_AB_alpha
+                        W_AB_beta_raw = ham.W_AB_beta
+                        W_M_BA_raw = ham.W_M_BA
+                        W_M_AB_raw = ham.W_M_AB
+
+                        s_A = 1
+                        s_B = 1
+                        D_A_raw = float("nan")
+                        D_A_corr = float("nan")
+                        D_B_raw = float("nan")
+                        D_B_corr = float("nan")
+
+                        if config.phase_tracking_enabled and orb_A_data is not None and orb_B_data is not None:
+                            s_A_prev = tracker_A.s
+                            s_B_prev = tracker_B.s
+                            s_A, D_A_raw = tracker_A.update(
+                                orb_A_data.C_alpha, orb_A_data.C_beta,
+                                orb_A_data.n_alpha, orb_A_data.n_beta,
+                                S_AO_data,
+                                cross_overlap_mode=config.phase_tracking_cross_overlap_mode,
+                            )
+                            s_B, D_B_raw = tracker_B.update(
+                                orb_B_data.C_alpha, orb_B_data.C_beta,
+                                orb_B_data.n_alpha, orb_B_data.n_beta,
+                                S_AO_data,
+                                cross_overlap_mode=config.phase_tracking_cross_overlap_mode,
+                            )
+                            D_A_corr = tracker_A.last_D_corr
+                            D_B_corr = tracker_B.last_D_corr
+
+                            gauge = s_A * s_B
+                            # Apply gauge correction: H_AB and all <Phi_B|...|Phi_A>
+                            # quantities transform with s_A * s_B.
+                            ham.H_AB = gauge * H_AB_raw
+                            ham.S_AB = gauge * S_AB_raw
+                            ham.S_AB_alpha = gauge * S_AB_alpha_raw
+                            ham.S_AB_beta = gauge * S_AB_beta_raw
+                            ham.W_BA = gauge * W_BA_raw
+                            ham.W_AB = gauge * W_AB_raw
+                            ham.W_BA_alpha = gauge * W_BA_alpha_raw
+                            ham.W_BA_beta = gauge * W_BA_beta_raw
+                            ham.W_AB_alpha = gauge * W_AB_alpha_raw
+                            ham.W_AB_beta = gauge * W_AB_beta_raw
+                            ham.W_M_BA = gauge * W_M_BA_raw
+                            ham.W_M_AB = gauge * W_M_AB_raw
+                            ham.H = np.array([[ham.E_A, ham.H_AB],
+                                              [ham.H_AB, ham.E_B]])
+                            ham.S = np.array([[1.0, ham.S_AB],
+                                              [ham.S_AB, 1.0]])
+                            # Transfer integrals must be recomputed from the
+                            # gauge-corrected matrices.
+                            J_direct = compute_transfer_integral_unrestricted(
+                                ham.H, ham.S, method="direct")
+                            J_lowdin = compute_transfer_integral_unrestricted(
+                                ham.H, ham.S, method="lowdin")
+
+                        gauge = s_A * s_B
+                        # ------------------------------------------------------
+
                         # Solve eigenvalue problem
                         eigenvalues, _ = solve_cdftbci_unrestricted(ham.H, ham.S)
                         
@@ -1798,9 +2195,13 @@ def run_cdftbci_analysis(config_path: Path) -> None:
                         J_lowdin_meV = J_lowdin * 27211.386
                         dE_eV = (eigenvalues[1] - eigenvalues[0]) * 27.211386
                         
-                        print(f"  CDFTB-CI: S_AB={ham.S_AB:.6f}, J={J_lowdin_meV:.2f} meV, ΔE={dE_eV:.4f} eV")
+                        if config.phase_tracking_enabled:
+                            print(f"  CDFTB-CI: S_AB={ham.S_AB:+.6f}, J={J_lowdin_meV:+.2f} meV, ΔE={dE_eV:.4f} eV "
+                                  f"(s_A={s_A:+d}, s_B={s_B:+d})")
+                        else:
+                            print(f"  CDFTB-CI: S_AB={ham.S_AB:.6f}, J={J_lowdin_meV:.2f} meV, ΔE={dE_eV:.4f} eV")
                         
-                        # Write CI results
+                        # Write CI results (gauge-corrected if enabled)
                         ci_file.write(f"{frame_id:5d}  {time_val:8.2f}  {J_lowdin_meV:12.4f}  "
                                       f"{eigenvalues[0]:16.10f}  {eigenvalues[1]:16.10f}  {dE_eV:10.6f}\n")
                         ci_file.flush()
@@ -1816,6 +2217,55 @@ def run_cdftbci_analysis(config_path: Path) -> None:
                             f"{ham.W_AB:14.10f}  {ham.W_AB_alpha:14.10f}  {ham.W_AB_beta:14.10f}\n"
                         )
                         ci_sub_file.flush()
+
+                        if config.phase_tracking_enabled:
+                            # ------- Phase-tracking sanity diagnostics -------
+                            flags: list = []
+                            if np.isfinite(D_A_raw):
+                                absA = abs(D_A_raw)
+                                if absA < config.phase_warn_low_overlap:
+                                    flags.append("LOW_DA")
+                                    warn_counts["LOW_DA"] += 1
+                                if absA > config.phase_warn_high_overlap:
+                                    flags.append("HIGH_DA")
+                                    warn_counts["HIGH_DA"] += 1
+                            if np.isfinite(D_B_raw):
+                                absB = abs(D_B_raw)
+                                if absB < config.phase_warn_low_overlap:
+                                    flags.append("LOW_DB")
+                                    warn_counts["LOW_DB"] += 1
+                                if absB > config.phase_warn_high_overlap:
+                                    flags.append("HIGH_DB")
+                                    warn_counts["HIGH_DB"] += 1
+                            # Post-correction sign flip of H_AB between
+                            # consecutive successful frames.
+                            if (config.phase_warn_post_correction_flip
+                                    and np.isfinite(prev_H_AB_corr)
+                                    and np.isfinite(ham.H_AB)
+                                    and prev_H_AB_corr != 0.0 and ham.H_AB != 0.0
+                                    and (prev_H_AB_corr * ham.H_AB) < 0.0):
+                                flags.append("FLIP_HAB")
+                                warn_counts["FLIP_HAB"] += 1
+                            flags_str = ",".join(flags) if flags else "OK"
+                            if flags:
+                                warn_frames.append((frame_id, flags_str))
+                                print(f"  [PHASE WARN] frame {frame_id}: {flags_str} "
+                                      f"(|D_A|={abs(D_A_raw):.3f}, |D_B|={abs(D_B_raw):.3f}, "
+                                      f"H_AB_corr: {prev_H_AB_corr:+.4f} -> {ham.H_AB:+.4f} Ha)")
+                            # Update previous corrected H_AB for next frame.
+                            prev_H_AB_corr = float(ham.H_AB)
+
+                            if phase_file is not None:
+                                phase_file.write(
+                                    f"{frame_id:5d}  {time_val:8.2f}  "
+                                    f"{s_A:+3d}  {s_B:+3d}  {gauge:+3d}  "
+                                    f"{D_A_raw:16.10f}  {D_A_corr:16.10f}  "
+                                    f"{D_B_raw:16.10f}  {D_B_corr:16.10f}  "
+                                    f"{H_AB_raw:16.10f}  {ham.H_AB:16.10f}  "
+                                    f"{S_AB_raw:16.10f}  {ham.S_AB:16.10f}  "
+                                    f"{flags_str}\n"
+                                )
+                                phase_file.flush()
             
             # Compute spin populations for both constraint states
             if cdftb_success and len(config.fragments) == 2:
@@ -1880,13 +2330,33 @@ def run_cdftbci_analysis(config_path: Path) -> None:
             spin_file.close()
         if retry_log_file:
             retry_log_file.close()
+        if phase_file:
+            phase_file.close()
+        if scc_log_file:
+            scc_log_file.close()
         
         print("=" * 70)
         print(f"Energies saved to {config.energy_file}")
         print(f"Charges saved to {config.charge_file}")
         print(f"Spin populations saved to {config.spin_output_file}")
         print(f"Retry log saved to {config.retry_log_file}")
+        if config.scc_log_enabled:
+            print(f"SCC convergence log saved to {config.scc_log_file}")
         if config.ci_enabled:
             print(f"CDFTB-CI results saved to {config.ci_output_file}")
             print(f"CDFTB-CI sub values saved to {config.ci_sub_file}")
+            if config.phase_tracking_enabled:
+                print(f"CDFTB-CI phase tracking saved to {config.phase_output_file}")
+                total_warn = sum(warn_counts.values())
+                if total_warn == 0:
+                    print("Phase tracking: no warnings (all frames passed sanity checks).")
+                else:
+                    print(f"Phase tracking: {total_warn} warning(s) raised:")
+                    for k, v in warn_counts.items():
+                        if v > 0:
+                            print(f"  {k}: {v}")
+                    if warn_frames:
+                        preview = ", ".join(f"{fid}:{flg}" for fid, flg in warn_frames[:10])
+                        more = "" if len(warn_frames) <= 10 else f", ... (+{len(warn_frames)-10} more)"
+                        print(f"  Frames flagged: {preview}{more}")
         print("=" * 70)

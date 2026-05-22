@@ -1,0 +1,75 @@
+input:
+  trajectory: traj/nve.dcd
+  topology: traj/pentacene.pdb
+  qm_atoms: traj/qmatoms
+  pccharges_template: input/PCcharges.dat
+  hsd_template: input/dftb_in.hsd
+output:
+  directory: output_phase_test
+  energy_file: energies.dat
+  charge_file: charges.dat
+  ci_file: cdftbci.dat
+  ci_sub_file: cdftbci_sub.dat
+  mode: online_ci
+  work_directory: work
+frames:
+  start: 220
+  n_frames: 5
+  t0_fs: 0.0
+  dt_fs: 4.0
+dftb:
+  library_path: /home/takahashi/opt/dftb+/lib/libdftbplus.so
+  num_threads: 8
+  timeout: 600
+fragments:
+- name: fragment1
+  atom_range: '1:36'
+- name: fragment2
+  atom_range: 37:72
+cdftb_ci:
+  enabled: true
+  N_A: 101
+  N_B: 101
+  M_A: 1.0
+  M_B: 1.0
+scc:
+  use_previous_charges: true
+  # Log iSCC and SCC error per fragment per frame (one row per retry attempt)
+  log_enabled: true
+  logfile: scc_error.dat
+  # Retry strategy on CDFTB failure. Tried in order until one succeeds.
+  # Per-attempt keys:
+  #   label                 : tag written to retry_log.dat / scc_error.dat
+  #   use_initial_charges   : null=use scc.use_previous_charges policy,
+  #                           true/false to force
+  #   disable_constraint    : drop ElectronicConstraints (fallback only)
+  #   mixing_parameter      : override MixingParameter inside the active mixer
+  #   max_scc_iterations    : override Hamiltonian.DFTB.MaxSCCIterations
+  #                           (inner SCC cap)
+  #   mixer                 : replace the whole Mixer block, e.g.
+  #                           {Anderson: {MixingParameter: 0.05, Generations: 4}}
+  #                           {Simple:   {MixingParameter: 0.05}}
+  #   optimiser             : replace ElectronicConstraints.Optimiser block,
+  #                           e.g. {LBFGS: {Memory: 20}}, {FIRE: {}},
+  #                           {SteepestDescent: {}}
+  #   max_constr_iterations : override ElectronicConstraints.MaxConstrIterations
+  #                           (outer Lagrange loop cap)
+  # Omit `retry` to use the built-in default chain.
+  retry:
+    - {label: first, use_initial_charges: null, max_scc_iterations: 400}
+    #- {label: mix0.01, use_initial_charges: true, mixing_parameter: 0.01, max_scc_iterations: 400}
+    - {label: no_init_charges, use_initial_charges: false, mixing_parameter: 0.01, max_scc_iterations: 400}
+    #- {label: anderson, use_initial_charges: false,
+    #   mixer: {Anderson: {MixingParameter: 0.01, Generations: 4, InitMixingParameter: 0.005}}, max_scc_iterations: 400}
+    #- {label: lbfgs_safe, use_initial_charges: false, mixing_parameter: 0.05,
+       optimiser: {LBFGS: {Memory: 5}},
+       max_constr_iterations: 300, max_scc_iterations: 500}
+    #- {label: sd_safe, use_initial_charges: false, mixing_parameter: 0.05,
+    #   optimiser: {SteepestDescent: {ScalingFactor: 0.3}}, max_constr_iterations: 400, max_scc_iterations: 400}
+    #- {label: simple, use_initial_charges: false,
+    #   mixer: {Simple: {MixingParameter: 0.05}}}
+phase_tracking:
+  enabled: true
+  cross_overlap_mode: current
+  warn_high_overlap: 1.5
+  warn_low_overlap: 0.5

@@ -1,0 +1,109 @@
+Geometry {
+  xyzFormat {
+    <<< "../qm_coords.xyz"
+  }
+}
+
+Hamiltonian {
+  DFTB {
+    SpinPolarisation {
+      Colinear {
+        UnpairedElectrons = 1
+        InitialSpins {
+          AtomSpin {
+            Atoms = 1:36
+            SpinPerAtom = 0.028
+          }
+        }
+      }
+    }
+    SpinConstants {
+      ShellResolvedSpin = Yes
+      H = -0.07174
+      C = -0.03062 -0.02505 -0.02505 -0.02265
+    }
+    ElectricField {
+      PointCharges {
+        GaussianBlurWidth [Angstrom] = 0.0
+        CoordsAndCharges [Angstrom] {
+          DirectRead {
+            Records = 17568
+            File = ../PCcharges.dat
+          }
+        }
+      }
+    }
+    Charge = 1
+    HCorrection {
+      Damping {
+        Exponent = 4.0
+      }
+    }
+    Scc = Yes
+    MaxSCCIterations = 500
+    ThirdOrderFull = Yes
+    ThirdOrder = No
+    HubbardDerivs {
+      H = -0.1857
+      C = -0.1492
+    }
+    SlaterKosterFiles {
+      C-C = '/home/takahashi/qmmm/sk/3ob/C-C.skf'
+      C-H = '/home/takahashi/qmmm/sk/3ob/C-H.skf'
+      H-C = '/home/takahashi/qmmm/sk/3ob/H-C.skf'
+      H-H = '/home/takahashi/qmmm/sk/3ob/H-H.skf'
+    }
+    MaxAngularMomentum {
+      C = "p"
+      H = "s"
+    }
+    Mixer {
+      Broyden {
+        MixingParameter = 0.05
+      }
+    }
+    ElectronicConstraints {
+      Constraints {
+        MullikenPopulation {
+          Atoms = 1:36
+          TotalCharge = 1.0
+        }
+        MullikenPopulation {
+          Atoms = 1:36
+          TotalSpin = 1.0
+        }
+      }
+      Optimiser {
+        LBFGS {
+          Memory = 5
+        }
+      }
+      ConstrTolerance = 0.001
+      MaxConstrIterations = 300
+      ConvergentConstrOnly = Yes
+    }
+    ReadInitialCharges = No
+  }
+}
+Analysis {
+  PrintForces = No
+  WriteEigenvectors = Yes
+  EigenvectorsAsText = Yes
+  WriteBandOut = Yes
+  MullikenAnalysis = Yes
+  WriteNetCharges = Yes
+}
+ParserOptions {
+  ParserVersion = 14
+}
+Options {
+  WriteDetailedOut = Yes
+  WriteDetailedXml = No
+  WriteAutotestTag = No
+  WriteResultsTag = No
+  RestartFrequency = 20
+  RandomSeed = 0
+  TimingVerbosity = 1
+  WriteCharges = Yes
+  WriteHS = No
+}
