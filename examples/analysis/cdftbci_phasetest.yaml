@@ -56,14 +56,16 @@ scc:
   #                           (outer Lagrange loop cap)
   # Omit `retry` to use the built-in default chain.
   retry:
-    - {label: first, use_initial_charges: null, max_scc_iterations: 400}
+    - {label: first, use_initial_charges: null, max_scc_iterations: 30}
     #- {label: mix0.01, use_initial_charges: true, mixing_parameter: 0.01, max_scc_iterations: 400}
-    - {label: no_init_charges, use_initial_charges: false, mixing_parameter: 0.01, max_scc_iterations: 400}
+    - {label: no_init_charges, use_initial_charges: false, mixing_parameter: 0.01, max_scc_iterations: 40}
+    - {label: small_step, use_initial_charges: false, mixing_parameter: 0.01,
+       optimiser: {FIRE: {StepSize: 0.2}}, max_constr_iterations: 300, max_scc_iterations: 50}
     #- {label: anderson, use_initial_charges: false,
     #   mixer: {Anderson: {MixingParameter: 0.01, Generations: 4, InitMixingParameter: 0.005}}, max_scc_iterations: 400}
     #- {label: lbfgs_safe, use_initial_charges: false, mixing_parameter: 0.05,
-       optimiser: {LBFGS: {Memory: 5}},
-       max_constr_iterations: 300, max_scc_iterations: 500}
+       #optimiser: {LBFGS: {Memory: 5}},
+       #max_constr_iterations: 300, max_scc_iterations: 500}
     #- {label: sd_safe, use_initial_charges: false, mixing_parameter: 0.05,
     #   optimiser: {SteepestDescent: {ScalingFactor: 0.3}}, max_constr_iterations: 400, max_scc_iterations: 400}
     #- {label: simple, use_initial_charges: false,
