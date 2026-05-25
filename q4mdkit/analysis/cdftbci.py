@@ -640,6 +640,20 @@ def compute_transfer_integral_unrestricted(
         raise ValueError(f"Unknown method: {method}")
 
 
+def effective_state_overlap_metric(D: float, n_alpha: int, n_beta: int) -> float:
+    """
+    Return the per-occupied-orbital effective overlap |D|^(1 / N_occ).
+
+    Here D is the many-electron state overlap determinant product and
+    N_occ = n_alpha + n_beta. This rescales the determinant to a quantity that
+    is easier to interpret across systems of different sizes.
+    """
+    n_occ = n_alpha + n_beta
+    if n_occ <= 0 or not np.isfinite(D):
+        return float("nan")
+    return float(abs(D) ** (1.0 / n_occ))
+
+
 # =============================================================================
 # I/O Functions for Unrestricted Calculations
 # =============================================================================
@@ -958,6 +972,7 @@ from .cdftb_result_reader import (
 from .spin import compute_fragment_spin_population
 
 from .phase_tracking import StatePhaseTracker
+from .odin_overlap import compute_cross_overlap_odin
 
 
 # Default retry strategy used when no `scc.retry` is given in the YAML.
@@ -1026,13 +1041,21 @@ class CDFTBCIConfig(CDFTBConfig):
     phase_tracking_cross_overlap_mode: str = "current"
     # Output file for the phase-tracking diagnostics.
     phase_output_file: Optional[Path] = None
-    # Warn when |D_raw| < this value (low overlap -> sign tracking unreliable).
+    # Warn when |D_raw|^(1/N_occ) < this value.
     phase_warn_low_overlap: float = 0.5
-    # Warn when |D_raw| > this value (cross-overlap approx breaking down).
+    # Warn when |D_raw|^(1/N_occ) > this value.
     phase_warn_high_overlap: float = 1.5
     # Warn when sign(H_AB_corr) flips between consecutive frames after
     # gauge correction (possible genuine diabatic crossing OR tracker miss).
     phase_warn_post_correction_flip: bool = True
+    # ODIN cross-overlap settings (used when cross_overlap_mode == "odin")
+    phase_odin_executable: Optional[str] = None
+    phase_odin_sk_prefix: str = ""
+    phase_odin_sk_separator: str = "-"
+    phase_odin_sk_suffix: str = ".skf"
+    phase_odin_lmax: Dict[str, int] = field(default_factory=dict)  # {"C": 2, "H": 1}
+    phase_odin_work_subdir: str = "odin_work"
+    phase_odin_keep_files: bool = False
 
 
 def load_cdftbci_config(config_path: Path) -> CDFTBCIConfig:
@@ -1122,6 +1145,14 @@ def load_cdftbci_config(config_path: Path) -> CDFTBCIConfig:
     phase_warn_low_overlap = float(phase_cfg.get('warn_low_overlap', 0.5))
     phase_warn_high_overlap = float(phase_cfg.get('warn_high_overlap', 1.5))
     phase_warn_post_correction_flip = bool(phase_cfg.get('warn_post_correction_flip', True))
+    odin_cfg = phase_cfg.get('odin', {})
+    phase_odin_executable = odin_cfg.get('executable', None)
+    phase_odin_sk_prefix = odin_cfg.get('sk_prefix', '')
+    phase_odin_sk_separator = odin_cfg.get('sk_separator', '-')
+    phase_odin_sk_suffix = odin_cfg.get('sk_suffix', '.skf')
+    phase_odin_lmax = {str(k): int(v) for k, v in odin_cfg.get('lmax', {}).items()}
+    phase_odin_work_subdir = odin_cfg.get('work_subdir', 'odin_work')
+    phase_odin_keep_files = bool(odin_cfg.get('keep_files', False))
     
     # Parse SCC settings
     scc_cfg = data.get('scc', {})
@@ -1206,6 +1237,13 @@ def load_cdftbci_config(config_path: Path) -> CDFTBCIConfig:
         phase_warn_low_overlap=phase_warn_low_overlap,
         phase_warn_high_overlap=phase_warn_high_overlap,
         phase_warn_post_correction_flip=phase_warn_post_correction_flip,
+        phase_odin_executable=phase_odin_executable,
+        phase_odin_sk_prefix=phase_odin_sk_prefix,
+        phase_odin_sk_separator=phase_odin_sk_separator,
+        phase_odin_sk_suffix=phase_odin_sk_suffix,
+        phase_odin_lmax=phase_odin_lmax,
+        phase_odin_work_subdir=phase_odin_work_subdir,
+        phase_odin_keep_files=phase_odin_keep_files,
     )
 
 
@@ -1889,24 +1927,34 @@ def run_cdftbci_analysis(config_path: Path) -> None:
                 "# D_A_corr = s_A(t_{n-1}) * D_A_raw. Same for B. NaN means tracker reset.\n"
             )
             phase_file.write(
+                "# D_A_eff = |D_A_raw|^(1/N_occ) with N_occ = n_alpha + n_beta. "
+                "Same for B.\n"
+            )
+            phase_file.write(
                 "# H_AB_raw / S_AB_raw are pre-correction; *_corr = s_A*s_B * raw.\n"
             )
             phase_file.write(
                 "# cross_overlap_mode = " + config.phase_tracking_cross_overlap_mode + "\n"
             )
+            if config.phase_tracking_cross_overlap_mode == "odin":
+                phase_file.write(
+                    "# In 'odin' mode, the cross-geometry AO overlap is computed "
+                    "externally from the previous successful frame to the current "
+                    "frame using the ODIN executable.\n"
+                )
             phase_file.write(
                 "# WARN flags:\n"
-                "#   LOW_DA / LOW_DB : |D_raw| below warn_low_overlap "
+                "#   LOW_DA / LOW_DB : D_eff below warn_low_overlap "
                 f"({config.phase_warn_low_overlap:.3f}) -> sign tracking may be unreliable.\n"
-                "#   HIGH_DA / HIGH_DB : |D_raw| above warn_high_overlap "
+                "#   HIGH_DA / HIGH_DB : D_eff above warn_high_overlap "
                 f"({config.phase_warn_high_overlap:.3f}) -> cross-overlap approximation breaking down.\n"
                 "#   FLIP_HAB : sign(H_AB_corr) flipped between consecutive frames AFTER "
                 "gauge correction (possible diabatic crossing or tracker miss).\n"
                 "#   OK if no warning.\n"
             )
             phase_file.write(
-                "# Frame  Time(fs)  s_A  s_B  gauge        D_A_raw          D_A_corr        "
-                "D_B_raw          D_B_corr        H_AB_raw(Ha)      H_AB_corr(Ha)      "
+                "# Frame  Time(fs)  s_A  s_B  gauge        D_A_raw          D_A_corr        D_A_eff         "
+                "D_B_raw          D_B_corr        D_B_eff         H_AB_raw(Ha)      H_AB_corr(Ha)      "
                 "S_AB_raw          S_AB_corr     flags\n"
             )
     
@@ -1939,6 +1987,9 @@ def run_cdftbci_analysis(config_path: Path) -> None:
         # Previous frame's gauge-corrected H_AB for post-correction
         # sign-flip detection (NaN until the first valid frame).
         prev_H_AB_corr = float("nan")
+        # QM coordinates at the last *successfully processed* frame (Angstrom).
+        # Used only when cross_overlap_mode == "odin".
+        prev_qm_coords_ang: Optional[np.ndarray] = None
         
         for frame_id, time_fs, qm_coords_bohr, mm_coords_ang in iter_qm_coordinates(
             config.traj_path, config.topology_path, qm_indices, mm_indices
@@ -2091,7 +2142,7 @@ def run_cdftbci_analysis(config_path: Path) -> None:
                     if config.phase_tracking_enabled and phase_file is not None:
                         phase_file.write(
                             f"{frame_id:5d}  {time_val:8.2f}  "
-                            + "  ".join(["nan"] * 11) + "  SKIP\n"
+                            + "  ".join(["nan"] * 13) + "  SKIP\n"
                         )
                         phase_file.flush()
                 else:
@@ -2116,7 +2167,7 @@ def run_cdftbci_analysis(config_path: Path) -> None:
                         if config.phase_tracking_enabled and phase_file is not None:
                             phase_file.write(
                                 f"{frame_id:5d}  {time_val:8.2f}  "
-                                + "  ".join(["nan"] * 11) + "  SKIP\n"
+                                + "  ".join(["nan"] * 13) + "  SKIP\n"
                             )
                             phase_file.flush()
                     else:
@@ -2138,26 +2189,76 @@ def run_cdftbci_analysis(config_path: Path) -> None:
                         s_B = 1
                         D_A_raw = float("nan")
                         D_A_corr = float("nan")
+                        D_A_eff = float("nan")
                         D_B_raw = float("nan")
                         D_B_corr = float("nan")
+                        D_B_eff = float("nan")
 
                         if config.phase_tracking_enabled and orb_A_data is not None and orb_B_data is not None:
+                            # Compute exact cross-geometry AO overlap via ODIN
+                            # when requested.  Falls back to None (tracker then
+                            # uses S_AO_data) if ODIN is unavailable or fails.
+                            S_ao_odin_cross: Optional[np.ndarray] = None
+                            if (
+                                config.phase_tracking_cross_overlap_mode == "odin"
+                                and config.phase_odin_executable is not None
+                                and prev_qm_coords_ang is not None
+                            ):
+                                try:
+                                    odin_subdir = None
+                                    if config.phase_odin_work_subdir:
+                                        odin_subdir = config.output_dir / config.phase_odin_work_subdir
+                                        if config.phase_odin_keep_files:
+                                            odin_subdir = odin_subdir / f"frame_{frame_id:05d}"
+                                    S_ao_odin_cross = compute_cross_overlap_odin(
+                                        prev_qm_coords_ang,
+                                        qm_coords_ang,
+                                        atom_types,
+                                        config.phase_odin_lmax,
+                                        config.phase_odin_sk_prefix,
+                                        config.phase_odin_sk_separator,
+                                        config.phase_odin_sk_suffix,
+                                        config.phase_odin_executable,
+                                        work_dir=odin_subdir,
+                                        keep_files=config.phase_odin_keep_files,
+                                    )
+                                except Exception as _odin_exc:
+                                    print(
+                                        f"  [ODIN] Warning: cross-overlap computation failed: "
+                                        f"{_odin_exc}. Falling back to 'current' mode for this frame."
+                                    )
+                                    S_ao_odin_cross = None
+
                             s_A_prev = tracker_A.s
                             s_B_prev = tracker_B.s
+                            _cross_mode = config.phase_tracking_cross_overlap_mode
+                            _S_prev_for_tracker = (
+                                S_ao_odin_cross
+                                if _cross_mode == "odin"
+                                else S_AO_data
+                            )
                             s_A, D_A_raw = tracker_A.update(
                                 orb_A_data.C_alpha, orb_A_data.C_beta,
                                 orb_A_data.n_alpha, orb_A_data.n_beta,
                                 S_AO_data,
-                                cross_overlap_mode=config.phase_tracking_cross_overlap_mode,
+                                S_ao_previous=_S_prev_for_tracker,
+                                cross_overlap_mode=_cross_mode,
                             )
                             s_B, D_B_raw = tracker_B.update(
                                 orb_B_data.C_alpha, orb_B_data.C_beta,
                                 orb_B_data.n_alpha, orb_B_data.n_beta,
                                 S_AO_data,
-                                cross_overlap_mode=config.phase_tracking_cross_overlap_mode,
+                                S_ao_previous=_S_prev_for_tracker,
+                                cross_overlap_mode=_cross_mode,
                             )
                             D_A_corr = tracker_A.last_D_corr
                             D_B_corr = tracker_B.last_D_corr
+                            D_A_eff = effective_state_overlap_metric(
+                                D_A_raw, orb_A_data.n_alpha, orb_A_data.n_beta
+                            )
+                            D_B_eff = effective_state_overlap_metric(
+                                D_B_raw, orb_B_data.n_alpha, orb_B_data.n_beta
+                            )
 
                             gauge = s_A * s_B
                             # Apply gauge correction: H_AB and all <Phi_B|...|Phi_A>
@@ -2221,20 +2322,18 @@ def run_cdftbci_analysis(config_path: Path) -> None:
                         if config.phase_tracking_enabled:
                             # ------- Phase-tracking sanity diagnostics -------
                             flags: list = []
-                            if np.isfinite(D_A_raw):
-                                absA = abs(D_A_raw)
-                                if absA < config.phase_warn_low_overlap:
+                            if np.isfinite(D_A_eff):
+                                if D_A_eff < config.phase_warn_low_overlap:
                                     flags.append("LOW_DA")
                                     warn_counts["LOW_DA"] += 1
-                                if absA > config.phase_warn_high_overlap:
+                                if D_A_eff > config.phase_warn_high_overlap:
                                     flags.append("HIGH_DA")
                                     warn_counts["HIGH_DA"] += 1
-                            if np.isfinite(D_B_raw):
-                                absB = abs(D_B_raw)
-                                if absB < config.phase_warn_low_overlap:
+                            if np.isfinite(D_B_eff):
+                                if D_B_eff < config.phase_warn_low_overlap:
                                     flags.append("LOW_DB")
                                     warn_counts["LOW_DB"] += 1
-                                if absB > config.phase_warn_high_overlap:
+                                if D_B_eff > config.phase_warn_high_overlap:
                                     flags.append("HIGH_DB")
                                     warn_counts["HIGH_DB"] += 1
                             # Post-correction sign flip of H_AB between
@@ -2250,7 +2349,7 @@ def run_cdftbci_analysis(config_path: Path) -> None:
                             if flags:
                                 warn_frames.append((frame_id, flags_str))
                                 print(f"  [PHASE WARN] frame {frame_id}: {flags_str} "
-                                      f"(|D_A|={abs(D_A_raw):.3f}, |D_B|={abs(D_B_raw):.3f}, "
+                                      f"(D_A_eff={D_A_eff:.3f}, D_B_eff={D_B_eff:.3f}, "
                                       f"H_AB_corr: {prev_H_AB_corr:+.4f} -> {ham.H_AB:+.4f} Ha)")
                             # Update previous corrected H_AB for next frame.
                             prev_H_AB_corr = float(ham.H_AB)
@@ -2259,13 +2358,18 @@ def run_cdftbci_analysis(config_path: Path) -> None:
                                 phase_file.write(
                                     f"{frame_id:5d}  {time_val:8.2f}  "
                                     f"{s_A:+3d}  {s_B:+3d}  {gauge:+3d}  "
-                                    f"{D_A_raw:16.10f}  {D_A_corr:16.10f}  "
-                                    f"{D_B_raw:16.10f}  {D_B_corr:16.10f}  "
+                                    f"{D_A_raw:16.10f}  {D_A_corr:16.10f}  {D_A_eff:16.10f}  "
+                                    f"{D_B_raw:16.10f}  {D_B_corr:16.10f}  {D_B_eff:16.10f}  "
                                     f"{H_AB_raw:16.10f}  {ham.H_AB:16.10f}  "
                                     f"{S_AB_raw:16.10f}  {ham.S_AB:16.10f}  "
                                     f"{flags_str}\n"
                                 )
                                 phase_file.flush()
+
+                            # Update previous successful QM geometry only after a
+                            # fully successful CI evaluation. Failed/SKIP frames do
+                            # not advance the ODIN reference geometry.
+                            prev_qm_coords_ang = qm_coords_ang.copy()
             
             # Compute spin populations for both constraint states
             if cdftb_success and len(config.fragments) == 2:

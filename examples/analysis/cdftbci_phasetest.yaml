@@ -13,8 +13,8 @@ output:
   mode: online_ci
   work_directory: work
 frames:
-  start: 220
-  n_frames: 5
+  start: 0
+  n_frames: 50
   t0_fs: 0.0
   dt_fs: 4.0
 dftb:
@@ -25,7 +25,7 @@ fragments:
 - name: fragment1
   atom_range: '1:36'
 - name: fragment2
-  atom_range: 37:72
+  atom_range: '37:72'
 cdftb_ci:
   enabled: true
   N_A: 101
@@ -72,6 +72,16 @@ scc:
     #   mixer: {Simple: {MixingParameter: 0.05}}}
 phase_tracking:
   enabled: true
-  cross_overlap_mode: current
-  warn_high_overlap: 1.5
-  warn_low_overlap: 0.5
+  cross_overlap_mode: odin
+  warn_high_overlap: 1.1
+  warn_low_overlap: 0.9
+  odin:
+    executable: odin
+    sk_prefix: /home/takahashi/qmmm/sk/3ob/
+    sk_separator: "-"
+    sk_suffix: ".skf"
+    lmax:
+      C: 2
+      H: 1
+    work_subdir: odin_work
+    #keep_files: false

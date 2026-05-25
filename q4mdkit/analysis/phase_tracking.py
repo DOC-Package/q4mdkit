@@ -165,11 +165,13 @@ class StatePhaseTracker:
         S_ao_previous : np.ndarray, optional
             AO overlap matrix at t_{n-1}. Only used when
             cross_overlap_mode == "midpoint".
-        cross_overlap_mode : {"current", "previous", "midpoint"}
+        cross_overlap_mode : {"current", "previous", "midpoint", "odin"}
             Approximation for the cross-geometry AO overlap S^{n-1,n}:
               "current"  -> S(t_n)                    (default, robust)
               "previous" -> S(t_{n-1})
               "midpoint" -> 0.5 [S(t_{n-1}) + S(t_n)]
+              "odin"     -> use the pre-computed exact cross-overlap passed
+                            in ``S_ao_previous`` (computed externally via ODIN).
 
         Returns
         -------
@@ -207,6 +209,15 @@ class StatePhaseTracker:
                 S_cross = S_ao_current
             else:
                 S_cross = 0.5 * (S_ao_previous + S_ao_current)
+        elif cross_overlap_mode == "odin":
+            # S_ao_previous must be the pre-computed exact cross-geometry
+            # overlap S^{n-1,n} provided by the caller (e.g., from ODIN).
+            if S_ao_previous is None:
+                raise ValueError(
+                    "S_ao_previous must be the ODIN-computed cross-overlap "
+                    "for cross_overlap_mode='odin'."
+                )
+            S_cross = S_ao_previous
         else:
             raise ValueError(f"Unknown cross_overlap_mode: {cross_overlap_mode}")
 
