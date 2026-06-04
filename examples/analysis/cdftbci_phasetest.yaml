@@ -74,7 +74,11 @@ phase_tracking:
   enabled: true
   cross_overlap_mode: odin
   warn_high_overlap: 1.1
-  warn_low_overlap: 0.9
+  warn_low_overlap: 0.99
+  warn_low_sigma_min: 0.7
+  sigma_accept_threshold: 0.7
+  reference_history: 5
+  warn_post_correction_flip: true
   odin:
     executable: odin
     sk_prefix: /home/takahashi/qmmm/sk/3ob/

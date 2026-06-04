@@ -79,3 +79,6 @@ q4mdkit.compat.bak/
 
 # old files
 examples/pentacene775-single/analysis/old/
+
+# reference files
+ref/
