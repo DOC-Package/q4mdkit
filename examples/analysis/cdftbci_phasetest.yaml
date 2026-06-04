@@ -73,6 +73,8 @@ scc:
 phase_tracking:
   enabled: true
   cross_overlap_mode: odin
+  corresponding_orbital_alignment: true
+  sigma_filtering_enabled: true
   warn_high_overlap: 1.1
   warn_low_overlap: 0.99
   warn_low_sigma_min: 0.7

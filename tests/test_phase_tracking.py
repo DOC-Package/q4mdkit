@@ -44,6 +44,33 @@ def test_state_phase_tracker_uses_corrected_reference_for_next_frame():
     assert np.isclose(tracker.last_D_corr, 1.0)
 
 
+def test_state_phase_tracker_can_disable_corresponding_orbital_alignment():
+    tracker = StatePhaseTracker(
+        name="A",
+        corresponding_orbital_alignment=False,
+    )
+    C_beta = np.zeros((2, 0))
+    S_ao = np.eye(2)
+    C_ref = np.eye(2)
+    C_swap = C_ref[:, [1, 0]]
+
+    tracker.update(C_ref, C_beta, 2, 0, S_ao)
+
+    s1, d1 = tracker.update(C_swap, C_beta, 2, 0, S_ao)
+    assert s1 == -1
+    assert np.isclose(d1, -1.0)
+    assert tracker.ref_history
+    assert np.allclose(
+        tracker.ref_history[0].occ_alpha,
+        np.array([[0.0, 1.0], [-1.0, 0.0]]),
+    )
+
+    s2, d2 = tracker.update(C_ref, C_beta, 2, 0, S_ao)
+    assert s2 == 1
+    assert np.isclose(d2, 1.0)
+    assert np.isclose(tracker.last_D_corr, 1.0)
+
+
 def test_state_phase_tracker_uses_global_many_electron_sign():
     tracker = StatePhaseTracker(name="A")
     C_alpha = np.array([[1.0], [0.0]])
@@ -186,6 +213,42 @@ def test_state_phase_tracker_low_primary_uses_accepted_lookback_reference():
     assert tracker.last_lookback_used is True
     assert tracker.last_reference_votes[0].sigma_min < 0.5
     assert tracker.last_reference_votes[1].sigma_min >= 0.5
+
+
+def test_state_phase_tracker_can_disable_sigma_filtering():
+    tracker = StatePhaseTracker(
+        name="A",
+        reference_history=5,
+        sigma_accept_threshold=0.5,
+        sigma_filtering_enabled=False,
+        invalidate_low_primary_sigma=True,
+    )
+    C_beta = np.zeros((3, 0))
+    S_ao = np.eye(3)
+    C_ref = np.array(
+        [
+            [1.0, 0.0],
+            [0.0, 1.0],
+            [0.0, 0.0],
+        ]
+    )
+    C_low_sigma = np.array(
+        [
+            [1.0, 0.0],
+            [0.0, -0.1],
+            [0.0, np.sqrt(1.0 - 0.1**2)],
+        ]
+    )
+
+    tracker.update(C_ref, C_beta, 2, 0, S_ao)
+    s1, d1 = tracker.update(C_low_sigma, C_beta, 2, 0, S_ao)
+
+    assert s1 == -1
+    assert np.isclose(d1, -0.1)
+    assert tracker.last_invalid is False
+    assert tracker.last_ambiguous is False
+    assert tracker.last_selected_ref_index == 0
+    assert tracker.last_lookback_used is False
 
 
 def test_weighted_phase_vote_marks_small_margin_as_ambiguous():

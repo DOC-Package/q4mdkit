@@ -1057,6 +1057,12 @@ class CDFTBCIConfig(CDFTBConfig):
     # If the latest occupied-overlap singular value falls below this threshold,
     # try older stored references before accepting the phase sign.
     phase_sigma_accept_threshold: float = 0.0
+    # If True, use singular-value thresholds to trigger lookback and frame
+    # invalidation. If False, always accept the latest reference.
+    phase_sigma_filtering_enabled: bool = True
+    # Apply the SVD-based corresponding-orbital alignment before committing a
+    # transported occupied-space reference.
+    phase_corresponding_orbital_alignment: bool = True
     # If True, a frame is invalidated when none of the stored references reaches
     # the sigma threshold. Older references are still tried first.
     phase_invalidate_low_primary_sigma: bool = True
@@ -1179,6 +1185,12 @@ def load_cdftbci_config(config_path: Path) -> CDFTBCIConfig:
     phase_sigma_accept_threshold = float(
         phase_cfg.get('sigma_accept_threshold', phase_warn_low_sigma_min)
     )
+    phase_sigma_filtering_enabled = bool(
+        phase_cfg.get('sigma_filtering_enabled', True)
+    )
+    phase_corresponding_orbital_alignment = bool(
+        phase_cfg.get('corresponding_orbital_alignment', True)
+    )
     phase_invalidate_low_primary_sigma = bool(
         phase_cfg.get('invalidate_low_primary_sigma', True)
     )
@@ -1286,6 +1298,8 @@ def load_cdftbci_config(config_path: Path) -> CDFTBCIConfig:
         phase_warn_low_overlap=phase_warn_low_overlap,
         phase_warn_low_sigma_min=phase_warn_low_sigma_min,
         phase_sigma_accept_threshold=phase_sigma_accept_threshold,
+        phase_sigma_filtering_enabled=phase_sigma_filtering_enabled,
+        phase_corresponding_orbital_alignment=phase_corresponding_orbital_alignment,
         phase_invalidate_low_primary_sigma=phase_invalidate_low_primary_sigma,
         phase_reference_history=phase_reference_history,
         phase_warn_high_overlap=phase_warn_high_overlap,
@@ -2107,6 +2121,8 @@ def run_cdftbci_analysis(config_path: Path) -> None:
             vote_ambiguity_ratio=config.phase_vote_ambiguity_ratio,
             reference_history=config.phase_reference_history,
             sigma_accept_threshold=config.phase_sigma_accept_threshold,
+            sigma_filtering_enabled=config.phase_sigma_filtering_enabled,
+            corresponding_orbital_alignment=config.phase_corresponding_orbital_alignment,
             invalidate_low_primary_sigma=config.phase_invalidate_low_primary_sigma,
         )
         tracker_B = StatePhaseTracker(
@@ -2116,6 +2132,8 @@ def run_cdftbci_analysis(config_path: Path) -> None:
             vote_ambiguity_ratio=config.phase_vote_ambiguity_ratio,
             reference_history=config.phase_reference_history,
             sigma_accept_threshold=config.phase_sigma_accept_threshold,
+            sigma_filtering_enabled=config.phase_sigma_filtering_enabled,
+            corresponding_orbital_alignment=config.phase_corresponding_orbital_alignment,
             invalidate_low_primary_sigma=config.phase_invalidate_low_primary_sigma,
         )
         # Previous frame's gauge-corrected H_AB for post-correction

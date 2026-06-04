@@ -118,12 +118,14 @@ def _compute_spin_channel_overlap(
     C_prev_occ: np.ndarray,
     C_curr_occ: np.ndarray,
     S_ao_cross: np.ndarray,
+    corresponding_orbital_alignment: bool = True,
 ) -> _SpinChannelOverlap:
     """
     Compute a spin-channel occupied-space overlap and its parallel transport.
 
-    The current occupied block is rotated by the orthogonal Procrustes
-    solution so that it is maximally aligned with the previous occupied block.
+    When corresponding-orbital alignment is enabled, the current occupied
+    block is rotated by the orthogonal Procrustes solution so that it is
+    maximally aligned with the previous occupied block.
     """
     if C_prev_occ.shape[1] == 0:
         return _SpinChannelOverlap(
@@ -155,9 +157,14 @@ def _compute_spin_channel_overlap(
     else:
         condition_number = float(sigma_max / sigma_min)
 
-    rotation = Vt.T @ U.T
-    rot_sign, _ = np.linalg.slogdet(rotation)
-    rotation_det = 1 if rot_sign >= 0.0 else -1
+    if corresponding_orbital_alignment:
+        rotation = Vt.T @ U.T
+        rot_sign, _ = np.linalg.slogdet(rotation)
+        rotation_det = 1 if rot_sign >= 0.0 else -1
+        transported_block = C_curr_occ @ rotation
+    else:
+        rotation_det = 1
+        transported_block = C_curr_occ.copy()
 
     sign = int(np.sign(full_sign))
     logabs = float(full_logabs)
@@ -179,7 +186,7 @@ def _compute_spin_channel_overlap(
         retained_sigma_min=retained_sigma_min,
         retained_count=retained_count,
         truncated_count=0,
-        transported_block=C_curr_occ @ rotation,
+        transported_block=transported_block,
     )
 
 
@@ -221,17 +228,20 @@ def _build_reference_vote(
     n_alpha: int,
     n_beta: int,
     S_ao_cross: np.ndarray,
+    corresponding_orbital_alignment: bool = True,
 ) -> _ReferenceVote:
     """Compute the sign proposal from one transported history reference."""
     alpha = _compute_spin_channel_overlap(
         ref.occ_alpha,
         C_curr_alpha,
         S_ao_cross,
+        corresponding_orbital_alignment=corresponding_orbital_alignment,
     )
     beta = _compute_spin_channel_overlap(
         ref.occ_beta,
         C_curr_beta,
         S_ao_cross,
+        corresponding_orbital_alignment=corresponding_orbital_alignment,
     )
 
     logabs = alpha.logabs + beta.logabs
@@ -409,6 +419,15 @@ class StatePhaseTracker:
         Minimum combined spin-channel singular value required to accept a
         reference for deterministic sign tracking. Set to 0.0 to always accept
         the latest reference.
+    sigma_filtering_enabled
+        If True, use ``sigma_accept_threshold`` to decide whether the latest
+        reference is accepted, whether to look back to older references, and
+        whether low-sigma frames can be invalidated. If False, always use the
+        latest reference regardless of singular values.
+    corresponding_orbital_alignment
+        If True, align the current occupied orbitals to the previous occupied
+        subspace by the corresponding-orbital SVD rotation before committing a
+        new reference. If False, keep the raw occupied orbitals.
     invalidate_low_primary_sigma
         If True, the current frame is invalidated when none of the stored
         references reaches ``sigma_accept_threshold``. Older references are
@@ -421,6 +440,8 @@ class StatePhaseTracker:
     vote_ambiguity_ratio: float = 0.15
     reference_history: int = 5
     sigma_accept_threshold: float = 0.0
+    sigma_filtering_enabled: bool = True
+    corresponding_orbital_alignment: bool = True
     invalidate_low_primary_sigma: bool = False
     s: int = 1
     prev_occ_alpha: Optional[np.ndarray] = field(default=None, repr=False)
@@ -685,11 +706,16 @@ class StatePhaseTracker:
                 n_alpha,
                 n_beta,
                 S_cross,
+                corresponding_orbital_alignment=self.corresponding_orbital_alignment,
             )
             for ref, S_cross in zip(refs, S_crosses)
         ]
 
-        threshold = max(0.0, float(self.sigma_accept_threshold))
+        threshold = (
+            max(0.0, float(self.sigma_accept_threshold))
+            if self.sigma_filtering_enabled
+            else 0.0
+        )
         selected_idx: Optional[int] = None
         if threshold <= 0.0:
             selected_idx = 0
@@ -702,7 +728,9 @@ class StatePhaseTracker:
         diagnostic_selected_idx = selected_idx if selected_idx is not None else -1
         no_accepted_reference = selected_idx is None
         invalid_frame = bool(
-            self.invalidate_low_primary_sigma and no_accepted_reference
+            self.sigma_filtering_enabled
+            and self.invalidate_low_primary_sigma
+            and no_accepted_reference
         )
         if selected_idx is None:
             weights = [
