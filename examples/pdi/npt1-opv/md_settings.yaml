@@ -1,0 +1,17 @@
+# MD Settings Configuration File
+
+# MD parameters
+md:
+  timestep: 0.001          # ps (1.0 fs)
+  traj_frequency: 50       # steps
+  nvt:
+    temperature: 300.0       # K
+    coupling_frequency: 1.0  # ps
+  npt:
+    pressure: 1              # bar
+    barostat_frequency: 25   # steps
+  simulation_time: 200.0       # ps
+
+# Output settings
+output:
+  directory: "output"

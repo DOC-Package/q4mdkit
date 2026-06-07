@@ -36,6 +36,7 @@ dftb:
     C: -0.1492
   hcorrection_zeta: 4.0
   max_scc_iterations: 300  # Maximum SCC iterations for DFTB
+  scc_tolerance: 1e-6        # SCC convergence tolerance for DFTB
   third_order_full: true   # Enable DFTB3 third-order correction
   # Dispersion correction
   # Options: DFTD3, DFTD4, SimpleDFTD3, SlaterKirkwood, LennardJones, TS, MBD
@@ -49,6 +50,15 @@ dftb:
   #   s6: 1.0
   #   s8: 3.209
   dispersion_params: null
+  # General DFTB+ Hybrid block (optional).
+  # This is passed through to Hamiltonian.DFTB.Hybrid.
+  # Example for LC-DFTB with matrix-based screening:
+  #   hybrid:
+  #     method: LC
+  #     params:
+  #       Screening:
+  #         method: MatrixBased
+  hybrid: null
   # SCC mixer settings (optional)
   # method: Broyden | Anderson | Simple | DIIS
   # Example:

@@ -318,6 +318,7 @@ class QMMMConfig:
             self.hubbard_derivs = None
         self.hcorrection_zeta = dftb.get('hcorrection_zeta', None)
         self.max_scc_iterations = dftb.get('max_scc_iterations', 300)
+        self.scc_tolerance = dftb.get('scc_tolerance', None)
         self.third_order_full = dftb.get('third_order_full', True)
         # Dispersion correction
         self.dispersion = dftb.get('dispersion', None)
@@ -330,6 +331,14 @@ class QMMMConfig:
         #     screening_params:
         #       "CutoffReduction [Bohr]": 0.0
         self.range_separated = dftb.get('range_separated', None)
+        # General Hybrid block settings.
+        # Example YAML:
+        #   hybrid:
+        #     method: LC
+        #     params:
+        #       Screening:
+        #         method: MatrixBased
+        self.hybrid = dftb.get('hybrid', None)
         # SCC mixer settings
         # Example YAML:
         #   mixer:
@@ -545,9 +554,11 @@ class QMMMConfig:
             "hubbard_derivs_dict": self.hubbard_derivs,
             "hcorrection_zeta": self.hcorrection_zeta,
             "MaxSCCIterations": self.max_scc_iterations,
+            "SCCTolerance": self.scc_tolerance,
             "dispersion": self.dispersion,
             "dispersion_params": self.dispersion_params,
             "range_separated": self.range_separated,
+            "hybrid": self.hybrid,
             "mixer": self.mixer,
             "filling": self.filling,
             "read_initial_charges": self.read_initial_charges,
