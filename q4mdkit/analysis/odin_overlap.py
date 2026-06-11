@@ -51,6 +51,30 @@ from typing import Dict, List, Optional
 import numpy as np
 
 
+_ATOMIC_MASSES = {
+    'H': 1.008,
+    'He': 4.002602,
+    'Li': 6.941,
+    'Be': 9.012182,
+    'B': 10.811,
+    'C': 12.01,
+    'N': 14.0067,
+    'O': 15.9994,
+    'F': 18.9984032,
+    'Ne': 20.1797,
+    'Na': 22.98976928,
+    'Mg': 24.3050,
+    'Al': 26.9815386,
+    'Si': 28.0855,
+    'P': 30.973762,
+    'S': 32.065,
+    'Cl': 35.453,
+    'Ar': 39.948,
+    'K': 39.0983,
+    'Ca': 40.078,
+}
+
+
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
@@ -64,6 +88,7 @@ def compute_cross_overlap_odin(
     sk_separator: str,
     sk_suffix: str,
     odin_executable: str,
+    remove_translation_rotation: bool = False,
     work_dir: Optional[Path] = None,
     keep_files: bool = False,
 ) -> np.ndarray:
@@ -90,6 +115,11 @@ def compute_cross_overlap_odin(
         Suffix for SK files, e.g. ``'.skf'``.
     odin_executable : str
         Absolute path to the compiled ``odin`` binary.
+    remove_translation_rotation : bool
+        If True, remove rigid translation and rotation from the two geometries
+        before building the doubled ODIN system. This follows the same
+        center-of-mass removal plus mass-weighted rigid-body alignment used in
+        ``normal_mode_analysis.py``.
     work_dir : Path, optional
         Directory in which to run ODIN.  A temporary directory is used when
         *None* and cleaned up afterwards (unless ``keep_files=True``).
@@ -108,6 +138,13 @@ def compute_cross_overlap_odin(
     N = len(atom_types_per_atom)
     if coords_prev_ang.shape != (N, 3) or coords_curr_ang.shape != (N, 3):
         raise ValueError("coords_prev_ang and coords_curr_ang must both be (N, 3)")
+
+    if remove_translation_rotation:
+        coords_prev_ang, coords_curr_ang = _remove_translation_rotation_from_geometries(
+            coords_prev_ang,
+            coords_curr_ang,
+            atom_types_per_atom,
+        )
 
     # Unique element types in gen-file order (order of first appearance)
     unique_types = _unique_ordered(atom_types_per_atom)
@@ -156,6 +193,48 @@ def compute_cross_overlap_odin(
 def n_ao_for_atoms(atom_types_per_atom: List[str], lmax_dict: Dict[str, int]) -> int:
     """Return the total number of AOs for a list of atoms given lmax values."""
     return sum(lmax_dict[t] ** 2 for t in atom_types_per_atom)
+
+
+def _remove_translation_rotation_from_geometries(
+    coords_prev_ang: np.ndarray,
+    coords_curr_ang: np.ndarray,
+    atom_types_per_atom: List[str],
+) -> tuple[np.ndarray, np.ndarray]:
+    """
+    Remove rigid translation and rotation before cross-overlap evaluation.
+
+    The previous geometry is shifted to its center-of-mass frame. The current
+    geometry is shifted to its own center of mass and then mass-weight aligned
+    onto the previous geometry using the same rigid-body-removal procedure as
+    in ``normal_mode_analysis.py``.
+    """
+    masses = np.array([_ATOMIC_MASSES[t] for t in atom_types_per_atom], dtype=float)
+    prev_centered = _remove_center_of_mass(coords_prev_ang, masses)
+    curr_centered = _remove_center_of_mass(coords_curr_ang, masses)
+    rotation = _weighted_kabsch_rotation(curr_centered, prev_centered, masses)
+    curr_aligned = curr_centered @ rotation
+    return prev_centered, curr_aligned
+
+
+def _remove_center_of_mass(coords: np.ndarray, masses: np.ndarray) -> np.ndarray:
+    """Return coordinates centered at the mass-weighted center of mass."""
+    total_mass = float(np.sum(masses))
+    center = np.sum(masses[:, np.newaxis] * coords, axis=0) / total_mass
+    return coords - center
+
+
+def _weighted_kabsch_rotation(
+    source: np.ndarray,
+    target: np.ndarray,
+    weights: np.ndarray,
+) -> np.ndarray:
+    """Return the mass-weighted rigid-body rotation aligning ``source`` onto ``target``."""
+    covariance = (weights[:, np.newaxis] * source).T @ target
+    U, _, Vt = np.linalg.svd(covariance)
+    correction = np.eye(3)
+    if np.linalg.det(U @ Vt) < 0.0:
+        correction[-1, -1] = -1.0
+    return U @ correction @ Vt
 
 
 # ---------------------------------------------------------------------------

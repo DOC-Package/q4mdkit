@@ -36,9 +36,9 @@ ElectricField = {
     O-H = '/home/takahashi/qmmm/sk/opv/b3lyp/O-H.skf'
   }
   MaxAngularMomentum {
-    H = "s"
     C = "p"
     N = "p"
+    H = "s"
     O = "p"
   }
   Dispersion = DFTD3 {

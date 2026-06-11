@@ -91,6 +91,7 @@ class _SpinChannelOverlap:
     retained_sigma_min: float
     retained_count: int
     truncated_count: int
+    overlap_matrix: np.ndarray
     transported_block: np.ndarray
 
 
@@ -142,6 +143,7 @@ def _compute_spin_channel_overlap(
             retained_sigma_min=1.0,
             retained_count=0,
             truncated_count=0,
+            overlap_matrix=np.array([[1.0]]),
             transported_block=C_curr_occ.copy(),
         )
 
@@ -186,6 +188,7 @@ def _compute_spin_channel_overlap(
         retained_sigma_min=retained_sigma_min,
         retained_count=retained_count,
         truncated_count=0,
+        overlap_matrix=overlap.copy(),
         transported_block=transported_block,
     )
 

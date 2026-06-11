@@ -982,6 +982,7 @@ from .spin import compute_fragment_spin_population
 
 from .phase_tracking import StatePhaseTracker, choose_phase_continuity_override
 from .odin_overlap import compute_cross_overlap_odin
+from .overlap_dump import save_frame_overlap_matrices_binary
 
 
 # Default retry strategy used when no `scc.retry` is given in the YAML.
@@ -1018,6 +1019,8 @@ class CDFTBCIConfig(CDFTBConfig):
     # CI output files
     ci_output_file: Optional[Path] = None
     ci_sub_file: Optional[Path] = None
+    overlap_matrices_binary_enabled: bool = False
+    overlap_matrices_binary_dir: Optional[Path] = None
     
     # Spin output file
     spin_output_file: Optional[Path] = None
@@ -1057,6 +1060,9 @@ class CDFTBCIConfig(CDFTBConfig):
     # If the latest occupied-overlap singular value falls below this threshold,
     # try older stored references before accepting the phase sign.
     phase_sigma_accept_threshold: float = 0.0
+    # If True, remove rigid translation and rotation from QM geometries before
+    # exact ODIN cross-overlap evaluation.
+    phase_remove_translation_rotation_before_overlap: bool = False
     # If True, use singular-value thresholds to trigger lookback and frame
     # invalidation. If False, always accept the latest reference.
     phase_sigma_filtering_enabled: bool = True
@@ -1185,6 +1191,9 @@ def load_cdftbci_config(config_path: Path) -> CDFTBCIConfig:
     phase_sigma_accept_threshold = float(
         phase_cfg.get('sigma_accept_threshold', phase_warn_low_sigma_min)
     )
+    phase_remove_translation_rotation_before_overlap = bool(
+        phase_cfg.get('remove_translation_rotation_before_overlap', False)
+    )
     phase_sigma_filtering_enabled = bool(
         phase_cfg.get('sigma_filtering_enabled', True)
     )
@@ -1247,6 +1256,13 @@ def load_cdftbci_config(config_path: Path) -> CDFTBCIConfig:
     # CI output files
     ci_output_file = output_dir / output_cfg.get('ci_file', 'cdftbci.dat')
     ci_sub_file = output_dir / output_cfg.get('ci_sub_file', 'cdftbci_sub.dat')
+    overlap_matrices_binary_enabled = bool(
+        output_cfg.get('overlap_matrices_binary_enabled', False)
+    )
+    overlap_matrices_binary_dir = output_dir / output_cfg.get(
+        'overlap_matrices_binary_dir',
+        'overlap_matrices',
+    )
     
     # Spin output file
     spin_output_file = output_dir / output_cfg.get('spin_file', 'spin.dat')
@@ -1286,6 +1302,8 @@ def load_cdftbci_config(config_path: Path) -> CDFTBCIConfig:
         work_directory=work_directory,
         ci_output_file=ci_output_file,
         ci_sub_file=ci_sub_file,
+        overlap_matrices_binary_enabled=overlap_matrices_binary_enabled,
+        overlap_matrices_binary_dir=overlap_matrices_binary_dir,
         spin_output_file=spin_output_file,
         retry_log_file=retry_log_file,
         use_previous_charges=use_previous_charges,
@@ -1298,6 +1316,7 @@ def load_cdftbci_config(config_path: Path) -> CDFTBCIConfig:
         phase_warn_low_overlap=phase_warn_low_overlap,
         phase_warn_low_sigma_min=phase_warn_low_sigma_min,
         phase_sigma_accept_threshold=phase_sigma_accept_threshold,
+        phase_remove_translation_rotation_before_overlap=phase_remove_translation_rotation_before_overlap,
         phase_sigma_filtering_enabled=phase_sigma_filtering_enabled,
         phase_corresponding_orbital_alignment=phase_corresponding_orbital_alignment,
         phase_invalidate_low_primary_sigma=phase_invalidate_low_primary_sigma,
@@ -2025,6 +2044,10 @@ def run_cdftbci_analysis(config_path: Path) -> None:
                 "# cross_overlap_mode = " + config.phase_tracking_cross_overlap_mode + "\n"
             )
             phase_file.write(
+                "# remove_translation_rotation_before_overlap = "
+                f"{config.phase_remove_translation_rotation_before_overlap}\n"
+            )
+            phase_file.write(
                 "# sigma_accept_threshold = "
                 f"{config.phase_sigma_accept_threshold:.3f}, "
                 f"reference_history = {config.phase_reference_history}, "
@@ -2383,12 +2406,12 @@ def run_cdftbci_analysis(config_path: Path) -> None:
                         D_B_eff = float("nan")
                         continuity_override: Optional[str] = None
                         phase_frame_invalid = False
+                        S_ao_cross_history: Optional[List[Optional[np.ndarray]]] = None
 
                         if config.phase_tracking_enabled and orb_A_data is not None and orb_B_data is not None:
                             # Compute exact cross-geometry AO overlaps via ODIN
                             # when requested. One matrix is generated per
                             # stored history reference.
-                            S_ao_cross_history: Optional[List[Optional[np.ndarray]]] = None
                             if (
                                 config.phase_tracking_cross_overlap_mode == "odin"
                                 and config.phase_odin_executable is not None
@@ -2421,6 +2444,9 @@ def run_cdftbci_analysis(config_path: Path) -> None:
                                                 config.phase_odin_sk_separator,
                                                 config.phase_odin_sk_suffix,
                                                 config.phase_odin_executable,
+                                                remove_translation_rotation=(
+                                                    config.phase_remove_translation_rotation_before_overlap
+                                                ),
                                                 work_dir=odin_subdir,
                                                 keep_files=config.phase_odin_keep_files,
                                             )
@@ -2433,6 +2459,7 @@ def run_cdftbci_analysis(config_path: Path) -> None:
                                         )
                                         S_ao_cross_history.append(None)
 
+                        if config.phase_tracking_enabled and orb_A_data is not None and orb_B_data is not None:
                             _cross_mode = config.phase_tracking_cross_overlap_mode
                             _S_prev_for_tracker = (
                                 S_ao_cross_history[0]
@@ -2574,6 +2601,33 @@ def run_cdftbci_analysis(config_path: Path) -> None:
                                 ham.H, ham.S, method="direct")
                             J_lowdin = compute_transfer_integral_unrestricted(
                                 ham.H, ham.S, method="lowdin")
+
+                        if config.overlap_matrices_binary_enabled:
+                            save_frame_overlap_matrices_binary(
+                                config.overlap_matrices_binary_dir,
+                                frame_id,
+                                time_val,
+                                tracker_A_votes=(
+                                    tracker_A.last_reference_votes
+                                    if config.phase_tracking_enabled
+                                    else None
+                                ),
+                                tracker_B_votes=(
+                                    tracker_B.last_reference_votes
+                                    if config.phase_tracking_enabled
+                                    else None
+                                ),
+                                selected_ref_index_A=(
+                                    tracker_A.last_selected_ref_index
+                                    if config.phase_tracking_enabled
+                                    else -1
+                                ),
+                                selected_ref_index_B=(
+                                    tracker_B.last_selected_ref_index
+                                    if config.phase_tracking_enabled
+                                    else -1
+                                ),
+                            )
 
                         gauge = s_A * s_B
                         # ------------------------------------------------------
@@ -2825,6 +2879,8 @@ def run_cdftbci_analysis(config_path: Path) -> None:
         if config.ci_enabled:
             print(f"CDFTB-CI results saved to {config.ci_output_file}")
             print(f"CDFTB-CI sub values saved to {config.ci_sub_file}")
+            if config.overlap_matrices_binary_enabled:
+                print(f"CDFTB-CI overlap matrices saved to {config.overlap_matrices_binary_dir}")
             if config.phase_tracking_enabled:
                 print(f"CDFTB-CI phase tracking saved to {config.phase_output_file}")
                 if phase_lookback_file is not None:
