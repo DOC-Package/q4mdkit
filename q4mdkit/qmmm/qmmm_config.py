@@ -379,6 +379,7 @@ class QMMMConfig:
         self.periodic_cell_dimensions = openmm.get('periodic_cell_dimensions', None)
         self.use_boxfile = openmm.get('use_boxfile', False)
         self.autoconstraints = openmm.get('autoconstraints', None)
+        self.bondconstraints = openmm.get('bondconstraints', None)
         self.rigidwater = openmm.get('rigidwater', False)
         self.hydrogenmass = openmm.get('hydrogenmass', 1.5)
         self.platform = openmm.get('platform', 'CPU')
@@ -494,7 +495,8 @@ class QMMMConfig:
         with open(filename, 'r') as f:
             return [int(x) for x in f.read().strip().split()]
     
-    def create_openmm_theory(self, prmtopfile=None, inpcrdfile=None, pbc_vectors=None):
+    def create_openmm_theory(self, prmtopfile=None, inpcrdfile=None, pbc_vectors=None,
+                             fragment=None):
         """
         Create OpenMMTheory object using AMBER topology files.
         
@@ -503,6 +505,7 @@ class QMMMConfig:
             inpcrdfile: Path to AMBER inpcrd file. If None, uses the path from config.
             pbc_vectors: [[ax,ay,az], [bx,by,bz], [cx,cy,cz]] in Angstrom.
                          If None, uses the value from config.
+            fragment: ASH Fragment used to resolve two-atom bondconstraints.
         
         Returns:
             OpenMMTheory: Configured OpenMM theory object.
@@ -525,10 +528,13 @@ class QMMMConfig:
         return OpenMMTheory(
             Amberfiles=True,
             amberprmtopfile=prmtopfile,
+            pdbfile=self.pdbfile or None,
+            fragment=fragment,
             periodic=self.periodic,
             periodic_nonbonded_cutoff=self.periodic_nonbonded_cutoff,
             PBCvectors=pbc_vectors,
             autoconstraints=self.autoconstraints,
+            bondconstraints=self.bondconstraints,
             rigidwater=self.rigidwater,
             hydrogenmass=self.hydrogenmass,
             platform=self.platform,
@@ -647,7 +653,7 @@ class QMMMConfig:
         from ash import QMMMTheory
         
         if omm is None:
-            omm = self.create_openmm_theory()
+            omm = self.create_openmm_theory(fragment=frag)
         
         # Handle qm_theory (prefer qm_theory over deprecated qm_dftb)
         if qm_theory is None:
@@ -712,6 +718,7 @@ class QMMMConfig:
         print(f"  MM cores:        {self.numcores_mm}")
         print(f"  Platform:        {self.platform}")
         print(f"  Periodic:        {self.periodic}")
+        print(f"  Bond constraints:{self.bondconstraints}")
         if self.pbc_vectors:
             print(f"  PBC Box vectors:")
             for i, vec in enumerate(self.pbc_vectors):
@@ -752,9 +759,9 @@ def load_active_atoms(filename=None):
     """Load active atom indices from file."""
     return get_config().load_active_atoms(filename)
 
-def create_openmm_theory(prmtopfile=None, inpcrdfile=None, pbc_vectors=None):
+def create_openmm_theory(prmtopfile=None, inpcrdfile=None, pbc_vectors=None, fragment=None):
     """Create OpenMMTheory object using AMBER topology."""
-    return get_config().create_openmm_theory(prmtopfile, inpcrdfile, pbc_vectors)
+    return get_config().create_openmm_theory(prmtopfile, inpcrdfile, pbc_vectors, fragment)
 
 def create_dftb_theory():
     """Create DFTBTheory object."""

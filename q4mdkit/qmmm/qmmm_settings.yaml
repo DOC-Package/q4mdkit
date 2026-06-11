@@ -106,6 +106,10 @@ openmm:
   periodic: true
   periodic_nonbonded_cutoff: 9.0
   autoconstraints: null
+  # Optional user-defined bond constraints passed to ASH/OpenMM.
+  # Each entry is [atom_i, atom_j, distance_A]. If distance_A is omitted,
+  # the current distance from fragment/pdb coordinates is used.
+  bondconstraints: null
   rigidwater: false
   hydrogenmass: 1.5
   platform: "CPU"

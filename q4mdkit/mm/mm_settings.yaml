@@ -20,6 +20,10 @@ openmm:
   # periodic_cell_dimensions: [50.0, 50.0, 50.0]  # or use use_boxfile
   use_boxfile: false
   autoconstraints: null
+  # Optional user-defined bond constraints passed to ASH/OpenMM.
+  # Each entry is [atom_i, atom_j, distance_A]. If distance_A is omitted,
+  # the current distance from fragment/pdb coordinates is used.
+  bondconstraints: null
   rigidwater: false
   hydrogenmass: 1.5
   platform: "CPU"  # CPU, CUDA, OpenCL
