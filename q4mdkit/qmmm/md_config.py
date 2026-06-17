@@ -36,6 +36,9 @@ class MDConfig:
         md_settings = config.get('md', {})
         self.timestep = md_settings.get('timestep', 0.001)  # ps
         self.traj_frequency = md_settings.get('traj_frequency', 50)
+        self.special_wrapping = md_settings.get('special_wrapping', False)
+        self.special_wrapping_updatepos = md_settings.get('special_wrapping_updatepos', False)
+        self.wrapping_atoms = md_settings.get('wrapping_atoms', None)
         
         # Integrators for each ensemble (with defaults)
         integrators = md_settings.get('integrator', {})
@@ -82,6 +85,9 @@ class MDConfig:
         print(f"\nMD Configuration ({self.config_file}):")
         print(f"  Timestep:           {self.timestep} ps ({self.timestep * 1000} fs)")
         print(f"  Traj frequency:     {self.traj_frequency}")
+        print(f"  Special wrapping:   {self.special_wrapping}")
+        print(f"  Wrap update pos:    {self.special_wrapping_updatepos}")
+        print(f"  Wrapping atoms:     {self.wrapping_atoms}")
         print(f"  NVT:")
         print(f"    Temperature:      {self.temperature} K")
         print(f"    Coupling freq:    {self.coupling_frequency} /ps")
@@ -133,6 +139,9 @@ class MDConfig:
             coupling_frequency=self.coupling_frequency,
             integrator=self.nvt_integrator,
             traj_frequency=self.traj_frequency,
+            special_wrapping=self.special_wrapping,
+            special_wrapping_updatepos=self.special_wrapping_updatepos,
+            wrapping_atoms=self.wrapping_atoms,
             trajfilename=f"{output_dir}/nvt",
             datafilename=f"{output_dir}/nvt.csv",
             statefile=statefile
@@ -176,6 +185,9 @@ class MDConfig:
             barostat_frequency=self.barostat_frequency,
             integrator=self.npt_integrator,
             traj_frequency=self.traj_frequency,
+            special_wrapping=self.special_wrapping,
+            special_wrapping_updatepos=self.special_wrapping_updatepos,
+            wrapping_atoms=self.wrapping_atoms,
             trajfilename=f"{output_dir}/npt",
             datafilename=f"{output_dir}/npt.csv",
             statefile=statefile
@@ -213,6 +225,9 @@ class MDConfig:
             simulation_time=simulation_time,
             integrator=self.nve_integrator,
             traj_frequency=self.traj_frequency,
+            special_wrapping=self.special_wrapping,
+            special_wrapping_updatepos=self.special_wrapping_updatepos,
+            wrapping_atoms=self.wrapping_atoms,
             trajfilename=f"{output_dir}/nve",
             datafilename=f"{output_dir}/nve.csv",
             statefile=statefile

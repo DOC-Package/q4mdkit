@@ -5,6 +5,9 @@ md:
   # Timestep should be small for ab initio QM/MM
   timestep: 0.0005         # ps (0.5 fs, conservative for ORCA)
   traj_frequency: 100      # Save every 100 steps (50 fs)
+  special_wrapping: false  # Enable ASH mdtraj wrapping for problematic PBC cases
+  special_wrapping_updatepos: false  # Update OpenMM positions after wrapping
+  wrapping_atoms: null     # Optional anchor atom indices used by ASH wrapping
   integrator:
     nvt: "LangevinMiddleIntegrator"
     npt: "LangevinMiddleIntegrator"

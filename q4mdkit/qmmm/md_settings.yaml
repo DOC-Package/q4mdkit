@@ -4,6 +4,9 @@
 md:
   timestep: 0.001          # ps (1.0 fs)
   traj_frequency: 50       # steps
+  special_wrapping: false  # Let ASH/mdtraj wrap coordinates each step
+  special_wrapping_updatepos: false  # Push wrapped coordinates back to OpenMM
+  wrapping_atoms: null     # Optional anchor atom indices for wrapping
   integrator:
     nvt: "LangevinMiddleIntegrator"
     npt: "LangevinMiddleIntegrator"
