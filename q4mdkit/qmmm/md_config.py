@@ -38,7 +38,12 @@ class MDConfig:
         self.traj_frequency = md_settings.get('traj_frequency', 50)
         self.special_wrapping = md_settings.get('special_wrapping', False)
         self.special_wrapping_updatepos = md_settings.get('special_wrapping_updatepos', False)
-        self.wrapping_atoms = md_settings.get('wrapping_atoms', None)
+        wrapping_atoms_value = md_settings.get('wrapping_atoms', None)
+        wrapping_atoms_file = md_settings.get('wrapping_atoms_file', None)
+        self.wrapping_atoms = self._resolve_atom_indices(
+            wrapping_atoms_value,
+            wrapping_atoms_file,
+        )
         
         # Integrators for each ensemble (with defaults)
         integrators = md_settings.get('integrator', {})
@@ -79,6 +84,22 @@ class MDConfig:
         output = config.get('output', {})
         self.output_dir = output.get('directory', 'output')
         self.save_gro = output.get('save_gro', False)
+
+    def _resolve_atom_indices(self, atom_indices, atom_indices_file=None):
+        """Resolve atom indices from a list or from a file path."""
+        if atom_indices_file is not None:
+            return self._load_atom_indices_file(atom_indices_file)
+        if isinstance(atom_indices, str):
+            return self._load_atom_indices_file(atom_indices)
+        return atom_indices
+
+    def _load_atom_indices_file(self, filename):
+        """Load whitespace-separated 0-index atom indices from file."""
+        filepath = Path(filename)
+        if not filepath.is_absolute():
+            filepath = self.config_file.parent / filepath
+        with open(filepath, 'r') as f:
+            return [int(x) for x in f.read().strip().split()]
     
     def print_config(self):
         """Print MD configuration summary."""
