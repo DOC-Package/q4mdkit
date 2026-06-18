@@ -37,8 +37,8 @@ ElectricField = {
   }
   MaxAngularMomentum {
     C = "p"
-    N = "p"
     O = "p"
+    N = "p"
     H = "s"
   }
   Dispersion = DFTD3 {

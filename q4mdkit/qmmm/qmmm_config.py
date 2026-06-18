@@ -6,10 +6,29 @@ for creating ASH theory objects.
 """
 
 import os
+import inspect
 import re
 import shutil
 import yaml
 from pathlib import Path
+
+
+def _add_dftb_directory_kwarg(dftb_kwargs, dftb_directory, dftb_theory_cls):
+    """Add the DFTB+ directory keyword accepted by the installed ASH version."""
+    if dftb_directory is None:
+        return
+
+    params = inspect.signature(dftb_theory_cls.__init__).parameters
+    for key in ("dftbdir", "dftbplusdir"):
+        if key in params:
+            dftb_kwargs[key] = dftb_directory
+            return
+
+    accepted = ", ".join(params)
+    raise TypeError(
+        "Installed ASH DFTBTheory does not accept a DFTB+ directory keyword "
+        f"(tried dftbdir/dftbplusdir; accepted: {accepted})"
+    )
 
 
 class DFTBTheory_LogSCC:
@@ -551,6 +570,8 @@ class QMMMConfig:
         Returns:
             DFTBTheory or DFTBTheory_LogSCC: Configured DFTB theory object.
         """
+        from ash import DFTBTheory
+
         # Build common DFTB parameters
         dftb_kwargs = {
             "hamiltonian": "DFTB",
@@ -571,10 +592,12 @@ class QMMMConfig:
             "numcores": self.numcores_qm,
             "printlevel": 2
         }
-        
-        # Only add dftbplusdir if library_path is specified
-        if self.dftb_library_path is not None:
-            dftb_kwargs["dftbplusdir"] = self.dftb_library_path
+
+        _add_dftb_directory_kwarg(
+            dftb_kwargs,
+            self.dftb_library_path,
+            DFTBTheory,
+        )
         
         if self.scc_log:
             return DFTBTheory_LogSCC(
@@ -586,7 +609,6 @@ class QMMMConfig:
                 energy_logfile=self.energy_logfile
             )
         else:
-            from ash import DFTBTheory
             return DFTBTheory(**dftb_kwargs)
     
     def create_orca_theory(self):
