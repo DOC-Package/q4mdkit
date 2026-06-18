@@ -6,6 +6,9 @@ md:
   traj_frequency: 50       # steps
   special_wrapping: false  # Let ASH/mdtraj wrap coordinates each step
   special_wrapping_updatepos: false  # Push wrapped coordinates back to OpenMM
+  postprocess_wrapped_trajectory: null  # null follows special_wrapping; writes *_wrapped.dcd
+  wrap_final_pdb: null  # null follows special_wrapping; rewrites *_lastframe.pdb and keeps *_raw.pdb
+  wrap_final_state: null  # null follows special_wrapping; rewrites OpenMM_MD_final_state.xml
   wrapping_atoms: null     # Optional anchor atom indices for wrapping
   wrapping_atoms_file: null  # Optional file containing 0-indexed atom indices
   integrator:

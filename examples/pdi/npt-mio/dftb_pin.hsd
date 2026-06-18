@@ -1,0 +1,166 @@
+Geometry = {
+  xyzFormat = {
+40
+title
+O     13.207014083862  21.454910278320  16.452848434448
+O     19.247808456421  13.068295478821  11.676462173462
+O     17.360811233521  16.218238830566  19.771286010742
+O     17.385923385620  10.140586853027  14.619721412659
+N     12.917437553406  20.214351654053  18.375040054321
+N     18.343368530273  11.655143737793  13.179441452026
+C     15.063400268555  16.986227035522  16.480674743652
+C     16.581407546997  14.889129638672  15.226961135864
+C     15.850723266602  17.261302947998  15.294515609741
+C     16.641347885132  16.203983306885  14.700672149658
+C     15.121988296509  15.695093154907  17.152305603027
+C     15.832709312439  14.606313705444  16.423755645752
+C     14.370637893677  18.073932647705  17.138267517090
+C     17.149492263794  13.811620712280  14.520637512207
+C     14.269013404846  19.335388183594  16.494693756104
+C     17.922971725464  14.091396331787  13.382593154907
+C     13.787385940552  17.888141632080  18.423477172852
+C     17.022699356079  12.449508666992  15.032815933228
+C     15.821308135986  18.553266525269  14.792587280273
+C     17.297990798950  16.403539657593  13.477868080139
+C     14.618354797363  15.549797058105  18.445034027100
+C     15.647611618042  13.279503822327  16.817890167236
+C     15.072921752930  19.595989227295  15.402130126953
+C     17.957471847534  15.320397377014  12.784326553345
+C     13.982210159302  16.655576705933  19.096439361572
+C     16.286529541016  12.230413436890  16.171098709106
+C     13.493856430054  20.459178924561  17.130144119263
+C     18.628547668457  12.964344024658  12.702155113220
+C     13.242801666260  19.039585113525  19.087196350098
+C     17.594877243042  11.336031913757  14.323567390442
+H     16.375762939453  18.801090240479  13.880228042603
+H     17.390850067139  17.395940780640  12.995006561279
+H     14.818964958191  14.656841278076  18.955053329468
+H     16.088970184326  13.247364997864  18.058729171753
+H     15.181123733521  20.589933395386  15.042270660400
+H     15.754189491272  14.706598281860  12.577468872070
+H     13.734657287598  16.515914916992  20.177154541016
+H     16.092493057251  11.171195983887  16.419872283936
+H     12.481849670410  21.000623703003  18.910005569458
+H     18.689615249634  10.812311172485  12.736681938171
+  }
+}
+Hamiltonian = DFTB {
+  Charge = 0
+  ElectricField = {
+    PointCharges = {
+      GaussianBlurWidth [Angstrom] = 0.0
+      CoordsAndCharges [Angstrom] = DirectRead {
+        Records = 2040
+        File = 'PCcharges.dat'
+      }
+    }
+  }
+  Scc = Yes
+  MaxSCCIterations = 300
+  ThirdOrderFull = No
+  ThirdOrder = No
+  SlaterKosterFiles = {
+    C-C = '/home/takahashi/qmmm/sk/mio/C-C.skf'
+    C-H = '/home/takahashi/qmmm/sk/mio/C-H.skf'
+    H-C = '/home/takahashi/qmmm/sk/mio/H-C.skf'
+    H-H = '/home/takahashi/qmmm/sk/mio/H-H.skf'
+    C-N = '/home/takahashi/qmmm/sk/mio/C-N.skf'
+    N-C = '/home/takahashi/qmmm/sk/mio/N-C.skf'
+    N-N = '/home/takahashi/qmmm/sk/mio/N-N.skf'
+    N-H = '/home/takahashi/qmmm/sk/mio/N-H.skf'
+    H-N = '/home/takahashi/qmmm/sk/mio/H-N.skf'
+    C-O = '/home/takahashi/qmmm/sk/mio/C-O.skf'
+    O-C = '/home/takahashi/qmmm/sk/mio/O-C.skf'
+    O-O = '/home/takahashi/qmmm/sk/mio/O-O.skf'
+    N-O = '/home/takahashi/qmmm/sk/mio/N-O.skf'
+    O-N = '/home/takahashi/qmmm/sk/mio/O-N.skf'
+    H-O = '/home/takahashi/qmmm/sk/mio/H-O.skf'
+    O-H = '/home/takahashi/qmmm/sk/mio/O-H.skf'
+    Prefix = ""
+  }
+  MaxAngularMomentum = {
+    C = "p"
+    N = "p"
+    O = "p"
+    H = "s"
+  }
+  Dispersion = DFTD3 {
+    Damping = BeckeJohnson {
+      a1 = 0.4289
+      a2 = 4.4407
+    }
+    s6 = 1.0
+    s8 = 0.7875
+    cutoff = 94.868329805051374
+    cutoffcn = 40.000000000000000
+    threebody = No
+    hhrepulsion = No
+  }
+  Mixer = Broyden {
+    MixingParameter = 0.01
+    InverseJacobiWeight = 1.0000000000000000E-002
+    MinimalWeight = 1.0000000000000000
+    MaximalWeight = 100000.00000000000
+    WeightFactor = 1.0000000000000000E-002
+  }
+  ReadInitialCharges = Yes
+  PolynomialRepulsive = {}
+  Hybrid = None {}
+  ShellResolvedSCC = No
+  OldSKInterpolation = No
+  SCCTolerance = 1.0000000000000001E-005
+  ConvergentSCCOnly = Yes
+  HCorrection = None {}
+  SpinPolarisation = {}
+  Solver = RelativelyRobust {}
+  OnSiteCorrection = {}
+  Solvation = {}
+  ElectronicConstraints = {}
+  Electrostatics = GammaFunctional {}
+  Mdftb = None {}
+  Differentiation = FiniteDiff {
+    Delta = 1.2207031250000000E-004
+  }
+  ForceEvaluation = "Traditional"
+  Filling = Fermi {
+    Temperature = 0.0000000000000000
+  }
+}
+Options = {
+  WriteDetailedOut = Yes
+  WriteAutotestTag = No
+  WriteDetailedXML = No
+  WriteResultsTag = No
+  RestartFrequency = 20
+  RandomSeed = 0
+  WriteHS = No
+  WriteRealHS = No
+  MinimiseMemoryUsage = No
+  ShowFoldedCoords = No
+  TimingVerbosity = 1
+  ReadChargesAsText = No
+  WriteCharges = Yes
+  WriteChargesAsText = No
+  SkipChargeTest = No
+  BinaryAccessTypes = {
+ "stream"
+  }
+}
+ParserOptions = {
+  ParserVersion = 14
+  WriteHSDInput = Yes
+  StopAfterParsing = No
+  IgnoreUnprocessedNodes = No
+}
+Analysis = {
+  PrintForces = Yes
+  ProjectStates = {}
+  WriteEigenvectors = No
+  WriteBandOut = Yes
+  MullikenAnalysis = Yes
+  WriteNetCharges = No
+  AtomResolvedEnergies = No
+}
+Reks = None {}
+Driver = {}
+ExcitedState = {}
