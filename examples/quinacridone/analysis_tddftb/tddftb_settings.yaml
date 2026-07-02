@@ -11,10 +11,8 @@ input:
 # Output settings
 output:
   directory: "output_tddftb"
-  spectra_file: "absorption_spectrum.dat"
   excitations_file: "excitations.dat"
   work_directory: "work"
-  individual_spectra: false            # Save spectrum for each frame
 
 # Frame selection
 frames:
@@ -33,6 +31,3 @@ dftb:
 # TD-DFTB (Linear Response) settings
 tddftb:
   n_excitations: 10                    # Number of excited states
-  broadening_ev: 0.1                   # Gaussian broadening in eV
-  energy_range_ev: [0.0, 6.0]          # Energy range for spectrum (eV)
-  n_energy_points: 1000                # Points in spectrum

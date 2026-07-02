@@ -1,0 +1,34 @@
+# TD-DFTB Trajectory Analysis Settings
+# Computes absorption spectra along a trajectory and averages them.
+
+# Input paths (relative to this config file directory)
+input:
+  trajectory: "../nve-mio/output/nve-mio.dcd"              # Trajectory file (DCD format)
+  topology: "../input/pdi_acetonitrile.pdb"          # Topology file (GRO/PDB/etc.)
+  qm_atoms: "../input/qmatoms"                # QM atom indices file (0-indexed)
+  hsd_template: "input/dftb_tddft.hsd"    # DFTB+ HSD template with TD-DFTB settings
+  # pccharges_template: "../input/PCcharges.dat"  # Optional: Point charges template
+
+# Output settings
+output:
+  directory: "tddftb"              # Output directory
+  excitations_file: "excitations.dat"     # All excitation data
+  work_directory: "work"                  # Working directory name
+  individual_spectra: false               # Save spectrum for each frame
+
+# Frame selection
+frames:
+  start: 0                                # First frame to process (0-indexed)
+  n_frames: null                          # Number of frames (null = all)
+  t0_fs: 0.0                              # Initial time (fs)
+  dt_fs: 4.0                              # Time step (fs) between frames
+
+# DFTB+ settings
+dftb:
+  binary: "/home/takahashi/anaconda3/envs/mydftbplus/bin/dftb+"  # DFTB+ executable
+  num_threads: 4                          # Number of CPU threads
+  timeout: 600                            # Timeout per calculation (seconds)
+
+# TD-DFTB (Linear Response) settings
+tddftb:
+  n_excitations: 10                       # Number of excited states to compute

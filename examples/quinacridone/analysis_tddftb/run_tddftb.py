@@ -2,14 +2,13 @@
 """
 Run TD-DFTB trajectory analysis for quinacridone in DMSO.
 
-Computes excitation energies and absorption spectra using
-TD-DFTB (Linear Response / Casida) for each frame of the NVE trajectory.
+Computes excitation energies and oscillator strengths using TD-DFTB
+(Linear Response / Casida) for each frame of the NVE trajectory.
 
 Usage:
     python run_tddftb.py
 
 Output:
-    - output_tddftb/absorption_spectrum.dat: Averaged absorption spectrum
     - output_tddftb/excitations.dat: Raw excitation data for each frame
 """
 

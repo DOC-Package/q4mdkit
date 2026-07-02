@@ -1,5 +1,5 @@
 # TD-DFTB Trajectory Analysis Settings
-# Computes absorption spectra along a trajectory and averages them.
+# Extracts excitation energies and oscillator strengths along a trajectory.
 
 # Input paths (relative to this config file directory)
 input:
@@ -12,10 +12,8 @@ input:
 # Output settings
 output:
   directory: "output_tddftb"              # Output directory
-  spectra_file: "absorption_spectrum.dat" # Average absorption spectrum
   excitations_file: "excitations.dat"     # All excitation data
   work_directory: "work"                  # Working directory name
-  individual_spectra: false               # Save spectrum for each frame
 
 # Frame selection
 frames:
@@ -33,18 +31,3 @@ dftb:
 # TD-DFTB (Linear Response) settings
 tddftb:
   n_excitations: 10                       # Number of excited states to compute
-  broadening_ev: 0.1                      # Gaussian broadening width (eV)
-  energy_range_ev: [0.0, 6.0]             # Energy range for spectrum (eV)
-  n_energy_points: 1000                   # Number of points in spectrum
-  track_orbital_order: false              # Keep frontier MO labels smooth across frames
-  orbital_tracking_window: 10             # Frontier orbitals tracked on each side of HOMO/LUMO
-  orbital_tracking_overlap_threshold: 0.1 # Minimum singular value accepted for the frontier overlap block
-  #orbital_tracking_cross_overlap_mode: odin  # odin or coeff
-  odin:
-    executable: odin
-    sk_prefix: /path/to/sk/
-    sk_separator: "-"
-    sk_suffix: ".skf"
-    lmax: {}                              # Example: {C: 2, H: 1}
-    work_subdir: odin_work
-    keep_files: false

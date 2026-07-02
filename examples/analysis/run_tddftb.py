@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 """
-Run TD-DFTB trajectory analysis for absorption spectra.
+Run TD-DFTB trajectory analysis for excitation energies and oscillator strengths.
 
 Usage:
     python run_tddftb.py                    # Use default config file

@@ -1,9 +1,11 @@
 # VMD visualization script - All QM-like view
 # Shows entire system with CPK representation (QM-style)
-# Usage: vmd -e /home/takahashi/python/q4mdkit/examples/pentacene775/input/visualize_vmd_allqm.tcl
+# Usage: vmd -e /path/to/visualize_vmd_allqm.tcl
 
 # Load structure
-mol new /home/takahashi/python/q4mdkit/examples/pentacene775/input/pentacene_qmmm.pdb type pdb waitfor all
+set script_dir [file dirname [file normalize [info script]]]
+set pdb_path [file join $script_dir pentacene_qmmm.pdb]
+mol new $pdb_path type pdb waitfor all
 
 # Delete default representation
 mol delrep 0 top

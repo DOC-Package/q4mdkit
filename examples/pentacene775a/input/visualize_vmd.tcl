@@ -1,8 +1,10 @@
 # VMD visualization script for QM/MM system
-# Usage: vmd -e /home/takahashi/python/q4mdkit/examples/pentacene775/input/visualize_vmd.tcl
+# Usage: vmd -e /path/to/visualize_vmd.tcl
 
 # Load structure
-mol new /home/takahashi/python/q4mdkit/examples/pentacene775/input/pentacene_qmmm.pdb type pdb waitfor all
+set script_dir [file dirname [file normalize [info script]]]
+set pdb_path [file join $script_dir pentacene_qmmm.pdb]
+mol new $pdb_path type pdb waitfor all
 
 # Color by B-factor (QM/MM region)
 mol delrep 0 top

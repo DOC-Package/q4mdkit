@@ -85,7 +85,7 @@ def main() -> None:
     # -- Time-domain integral parameters ------------------------------------
     dt = 0.10                              # fs
     t_max = 2000.0                         # fs
-    damping = 1.0 / 500.0                  # 1/fs  (-> ~1.3 meV HWHM)
+    damping = 1.0 / 50.0                  # 1/fs  (-> ~1.3 meV HWHM)
 
     # -- Output frequency grid ----------------------------------------------
     omega_out_eV = np.linspace(1.5, 3.5, 2001)
