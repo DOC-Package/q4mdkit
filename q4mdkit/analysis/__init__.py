@@ -10,6 +10,7 @@ from .absorption import (
     absorption_spectrum,
     dipole_correlation,
     lineshape_function,
+    oscillator_strength_to_mu2,
 )
 
 # Optional / heavy-dependency modules ---------------------------------------

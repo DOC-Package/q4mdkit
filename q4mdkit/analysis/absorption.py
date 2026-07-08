@@ -26,7 +26,20 @@ __all__ = [
     "lineshape_function",
     "dipole_correlation",
     "absorption_spectrum",
+    "oscillator_strength_to_mu2",
 ]
+
+EV_PER_HARTREE = 27.211386245988
+
+
+def oscillator_strength_to_mu2(oscillator_strength: float, energy_ev: float) -> float:
+    """Convert dimensionless oscillator strength to |mu|^2 in atomic units."""
+    if oscillator_strength < 0.0:
+        raise ValueError("oscillator strength must be nonnegative")
+    if energy_ev <= 0.0:
+        raise ValueError("excitation energy must be positive")
+    energy_hartree = energy_ev / EV_PER_HARTREE
+    return 3.0 * oscillator_strength / (2.0 * energy_hartree)
 
 
 def _as_2d_J(J: np.ndarray, n_modes: int, n_w: int) -> np.ndarray:
@@ -96,20 +109,23 @@ def lineshape_function(
     w_pos = w[mask]
     Jm_pos = Jm[:, mask]
 
-    # Integrand kernel without J/w^2 prefactor; shape (Nt, Nw_pos).
-    wt = np.outer(t, w_pos)            # (Nt, Nw)
     coth = 1.0 / np.tanh(0.5 * beta * w_pos)  # (Nw,)
-    real_kernel = coth * (1.0 - np.cos(wt))   # (Nt, Nw)
-    imag_kernel = np.sin(wt) - wt              # (Nt, Nw)
-    kernel = real_kernel + 1j * imag_kernel    # (Nt, Nw)
-
-    # Per-mode prefactor J_m(w)/w^2; shape (n_modes, Nw_pos).
     pref = Jm_pos / (w_pos ** 2)
 
-    # g_m(t) = (1/pi) * trapz over w of pref_m(w) * kernel(t, w)
-    # einsum: integrand[m, t, w] = pref[m, w] * kernel[t, w]
-    integrand = pref[:, None, :] * kernel[None, :, :]   # (n_modes, Nt, Nw)
-    g = np.trapezoid(integrand, w_pos, axis=-1) / np.pi  # (n_modes, Nt)
+    # Bound temporary kernel memory for long trajectories by integrating
+    # fixed-size blocks of time points.
+    g = np.empty((n_modes, t.size), dtype=complex)
+    time_chunk_size = 64
+    for start in range(0, t.size, time_chunk_size):
+        stop = min(start + time_chunk_size, t.size)
+        wt = np.outer(t[start:stop], w_pos)
+        real_kernel = coth * (1.0 - np.cos(wt))
+        imag_kernel = np.sin(wt) - wt
+        kernel = real_kernel + 1j * imag_kernel
+        integrand = pref[:, None, :] * kernel[None, :, :]
+        g[:, start:stop] = (
+            np.trapezoid(integrand, w_pos, axis=-1) / np.pi
+        )
     return g
 
 
@@ -226,12 +242,16 @@ def absorption_spectrum(
     else:
         omega = np.asarray(omega_out, dtype=float)
 
-    # Direct (naive) DFT:
+    # Direct DFT on arbitrary output energies, chunked to bound memory use:
     #   int_0^T dt e^{i w t} f(t)  ~  dt * sum_n e^{i w t_n} f_n
     # phase has shape (Nout, Nt). For very large grids this is O(Nout*Nt)
     # but is conceptually simple and works on arbitrary omega grids.
-    phase = np.exp(1j * np.outer(omega, t))            # (Nout, Nt)
-    spec = phase @ chi_d * dt                          # (Nout,)
+    spec = np.empty(omega.size, dtype=complex)
+    chunk_size = 256
+    for start in range(0, omega.size, chunk_size):
+        stop = min(start + chunk_size, omega.size)
+        phase = np.exp(1j * np.outer(omega[start:stop], t))
+        spec[start:stop] = phase @ chi_d * dt
     I = omega * np.real(spec)
 
     return omega, I, chi

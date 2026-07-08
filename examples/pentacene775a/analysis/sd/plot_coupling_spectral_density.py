@@ -153,7 +153,7 @@ def correlation_to_spectral_density(t_corr: np.ndarray, C: np.ndarray,
         omega = two_pi_c * nu
         integrand = C_windowed * np.cos(omega * t_corr)
         integral = simpson(integrand, dx=dt)
-        J[i] = two_pi_c * nu / (2.0 * kB_cm * T) * integral
+        J[i] = two_pi_c * nu / (kB_cm * T) * integral
     
     return J
 
