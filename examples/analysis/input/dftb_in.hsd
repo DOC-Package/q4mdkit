@@ -103,7 +103,7 @@ H     30.548333349778  36.346782233361  28.130056346949
       GaussianBlurWidth [Angstrom] = 0.0
       CoordsAndCharges [Angstrom] = DirectRead { 
       Records = 17568
-      File = 'PCcharges.dat'
+      File = 'PCcharges-picene.dat'
       }
     }
   }
@@ -128,6 +128,14 @@ H     30.548333349778  36.346782233361  28.130056346949
   MaxAngularMomentum {
     C = "p"
     H = "s"
+  }
+  Dispersion = DFTD3 {
+    Damping = BeckeJohnson {
+      a1 = 0.746
+      a2 = 4.191
+    }
+    s6 = 1.0
+    s8 = 3.209
   }
   Mixer = Broyden {
     MixingParameter = 0.2    # default 0.2

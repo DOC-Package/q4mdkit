@@ -1100,6 +1100,55 @@ class CDFTBCIConfig(CDFTBConfig):
     phase_odin_lmax: Dict[str, int] = field(default_factory=dict)  # {"C": 2, "H": 1}
     phase_odin_work_subdir: str = "odin_work"
     phase_odin_keep_files: bool = False
+    # Optional phase-tracking driven adaptive refinement. When enabled, a low
+    # occupied-overlap singular value at a coarse frame triggers temporary
+    # evaluation of the intermediate frames from a finer trajectory.
+    phase_adaptive_refinement_enabled: bool = False
+    phase_adaptive_refinement_traj_path: Optional[Path] = None
+    phase_adaptive_refinement_sigma_min_threshold: float = 0.0
+    phase_adaptive_refinement_fine_dt_fs: float = 1.0
+    phase_adaptive_refinement_log_file: Optional[Path] = None
+
+
+def _fine_frame_indices_between(
+    prev_time_fs: float,
+    curr_time_fs: float,
+    fine_dt_fs: float,
+    *,
+    include_current: bool = False,
+) -> List[int]:
+    """Return fine-trajectory frame indices between two times."""
+    if fine_dt_fs <= 0.0:
+        raise ValueError("fine_dt_fs must be positive")
+    start = int(np.floor(prev_time_fs / fine_dt_fs)) + 1
+    stop = int(np.floor(curr_time_fs / fine_dt_fs)) + (
+        1 if include_current else 0
+    )
+    return list(range(start, stop))
+
+
+def _phase_adaptive_refinement_indices(
+    *,
+    enabled: bool,
+    previous_time_fs: Optional[float],
+    current_time_fs: float,
+    sigma_min_a: float,
+    sigma_min_b: float,
+    threshold: float,
+    fine_dt_fs: float,
+) -> List[int]:
+    """Return fine-frame indices requested by phase low-sigma diagnostics."""
+    if not enabled or previous_time_fs is None:
+        return []
+    sigma_min = min(sigma_min_a, sigma_min_b)
+    if not np.isfinite(sigma_min) or sigma_min > threshold:
+        return []
+    return _fine_frame_indices_between(
+        previous_time_fs,
+        current_time_fs,
+        fine_dt_fs,
+        include_current=True,
+    )
 
 
 def load_cdftbci_config(config_path: Path) -> CDFTBCIConfig:
@@ -1223,6 +1272,21 @@ def load_cdftbci_config(config_path: Path) -> CDFTBCIConfig:
     phase_odin_lmax = {str(k): int(v) for k, v in odin_cfg.get('lmax', {}).items()}
     phase_odin_work_subdir = odin_cfg.get('work_subdir', 'odin_work')
     phase_odin_keep_files = bool(odin_cfg.get('keep_files', False))
+    phase_adaptive_cfg = phase_cfg.get('adaptive_refinement', {})
+    phase_adaptive_refinement_enabled = bool(phase_adaptive_cfg.get('enabled', False))
+    phase_adaptive_refinement_traj_path = None
+    if phase_adaptive_cfg.get('trajectory_1fs') is not None:
+        phase_adaptive_refinement_traj_path = base_dir / phase_adaptive_cfg['trajectory_1fs']
+    phase_adaptive_refinement_sigma_min_threshold = float(
+        phase_adaptive_cfg.get('sigma_min_threshold', phase_warn_low_sigma_min)
+    )
+    phase_adaptive_refinement_fine_dt_fs = float(
+        phase_adaptive_cfg.get('fine_dt_fs', 1.0)
+    )
+    phase_adaptive_refinement_log_file = output_dir / phase_adaptive_cfg.get(
+        'log_file',
+        'adaptive_refinement.dat',
+    )
     
     # Parse SCC settings
     scc_cfg = data.get('scc', {})
@@ -1335,6 +1399,11 @@ def load_cdftbci_config(config_path: Path) -> CDFTBCIConfig:
         phase_odin_lmax=phase_odin_lmax,
         phase_odin_work_subdir=phase_odin_work_subdir,
         phase_odin_keep_files=phase_odin_keep_files,
+        phase_adaptive_refinement_enabled=phase_adaptive_refinement_enabled,
+        phase_adaptive_refinement_traj_path=phase_adaptive_refinement_traj_path,
+        phase_adaptive_refinement_sigma_min_threshold=phase_adaptive_refinement_sigma_min_threshold,
+        phase_adaptive_refinement_fine_dt_fs=phase_adaptive_refinement_fine_dt_fs,
+        phase_adaptive_refinement_log_file=phase_adaptive_refinement_log_file,
     )
 
 
@@ -1942,10 +2011,10 @@ def run_cdftbci_analysis(config_path: Path) -> None:
     charge_header = "\n".join(charge_header_lines) + "\n"
     
     # Open output files
-    energy_file = open(config.energy_file, "w")
+    energy_file = open(config.energy_file, "w+")
     energy_file.write(energy_header)
     
-    charge_file = open(config.charge_file, "w")
+    charge_file = open(config.charge_file, "w+")
     charge_file.write(charge_header)
     
     ci_file = None
@@ -1954,6 +2023,7 @@ def run_cdftbci_analysis(config_path: Path) -> None:
     retry_log_file = None
     phase_file = None
     phase_lookback_file = None
+    phase_adaptive_file = None
     scc_log_file = None
     # Pre-initialize phase-tracking warning aggregators so that the `finally`
     # cleanup block can reference them even if an exception is raised before
@@ -1969,7 +2039,7 @@ def run_cdftbci_analysis(config_path: Path) -> None:
     warn_frames: list = []
     
     # Open retry log file
-    retry_log_file = open(config.retry_log_file, "w")
+    retry_log_file = open(config.retry_log_file, "w+")
     retry_log_file.write("# Retry Log for CDFTB Calculations\n")
     retry_log_file.write("# Retry info: '-' = success on first attempt,\n")
     retry_log_file.write("#             'no_init_charges' = succeeded without initial charges, 'all_failed:...' = all attempts failed\n")
@@ -2112,6 +2182,17 @@ def run_cdftbci_analysis(config_path: Path) -> None:
                 "alpha_sigmin      beta_sigmin       alpha_sigmax      beta_sigmax       "
                 "alpha_cond        beta_cond         logabs_D\n"
             )
+            if config.phase_adaptive_refinement_enabled:
+                if config.phase_adaptive_refinement_traj_path is None:
+                    raise ValueError(
+                        "phase_tracking.adaptive_refinement.trajectory_1fs is required "
+                        "when phase adaptive refinement is enabled"
+                    )
+                phase_adaptive_file = open(config.phase_adaptive_refinement_log_file, "w")
+                phase_adaptive_file.write("# CDFTB-CI Phase Adaptive Refinement\n")
+                phase_adaptive_file.write(
+                    "# Frame  Time(fs)  sigma_min_A  sigma_min_B  refined  fine_frames\n"
+                )
     
     # Always open spin output file (useful even without CI)
     spin_file = open(config.spin_output_file, "w")
@@ -2129,6 +2210,7 @@ def run_cdftbci_analysis(config_path: Path) -> None:
     
     try:
         processed_count = 0
+        coarse_processed_count = 0
 
         # Phase trackers for the two charge-localized diabatic states.
         # On CDFTB failure the previous-frame MOs are simply KEPT as the
@@ -2166,6 +2248,13 @@ def run_cdftbci_analysis(config_path: Path) -> None:
         # QM coordinates at the last *successfully processed* frame (Angstrom).
         # Used only when cross_overlap_mode == "odin".
         phase_qm_coords_history: List[np.ndarray] = []
+        phase_adaptive_previous_time_fs: Optional[float] = None
+        pending_phase_refinement_frames: List[
+            Tuple[int, Optional[float], np.ndarray, np.ndarray, bool]
+        ] = []
+        pending_phase_refinement_charge_snapshot: Optional[
+            Dict[str, Optional[bytes]]
+        ] = None
 
         def write_phase_lookback_rows(frame_id, time_val, state_name, tracker):
             if phase_lookback_file is None:
@@ -2201,26 +2290,119 @@ def run_cdftbci_analysis(config_path: Path) -> None:
                     f"{vote.logabs:16.10f}\n"
                 )
             phase_lookback_file.flush()
-        
-        for frame_id, time_fs, qm_coords_bohr, mm_coords_ang in iter_qm_coordinates(
+
+        def snapshot_fragment_charges() -> Dict[str, Optional[bytes]]:
+            snapshot: Dict[str, Optional[bytes]] = {}
+            for frag in config.fragments:
+                charges_path = work_dir / frag.name / "charges.dat"
+                snapshot[frag.name] = (
+                    charges_path.read_bytes()
+                    if charges_path.exists()
+                    else None
+                )
+            return snapshot
+
+        def restore_fragment_charges(snapshot: Dict[str, Optional[bytes]]) -> None:
+            for frag in config.fragments:
+                charges_path = work_dir / frag.name / "charges.dat"
+                charges = snapshot.get(frag.name)
+                if charges is None:
+                    if charges_path.exists():
+                        charges_path.unlink()
+                    continue
+                charges_path.parent.mkdir(parents=True, exist_ok=True)
+                charges_path.write_bytes(charges)
+
+        def truncate_last_output_row(handle) -> None:
+            """Remove the last non-header row from an already-flushed text file."""
+            handle.flush()
+            handle.seek(0)
+            lines = handle.readlines()
+            header_count = 0
+            for line in lines:
+                if line.startswith("#"):
+                    header_count += 1
+                else:
+                    break
+            if len(lines) <= header_count:
+                handle.seek(0, 2)
+                return
+            handle.seek(0)
+            handle.truncate()
+            handle.writelines(lines[:-1])
+            handle.flush()
+
+        def enqueue_phase_refinement_frames(frame_indices: List[int]) -> None:
+            nonlocal pending_phase_refinement_charge_snapshot
+            if not frame_indices:
+                return
+            pending_phase_refinement_charge_snapshot = current_charge_snapshot
+            wanted = set(frame_indices)
+            max_wanted = max(wanted)
+            for fine_frame_id, fine_time_fs, fine_qm_bohr, fine_mm_ang in iter_qm_coordinates(
+                config.phase_adaptive_refinement_traj_path,
+                config.topology_path,
+                qm_indices,
+                mm_indices,
+            ):
+                if fine_frame_id in wanted:
+                    pending_phase_refinement_frames.append(
+                        (fine_frame_id, fine_time_fs, fine_qm_bohr, fine_mm_ang, True)
+                    )
+                if fine_frame_id >= max_wanted:
+                    break
+
+        coarse_frame_iter = iter_qm_coordinates(
             config.traj_path, config.topology_path, qm_indices, mm_indices
-        ):
-            # Skip frames before start_frame
-            if frame_id < config.start_frame:
-                continue
-            
-            # Stop if we've processed enough frames
-            if config.n_frames is not None and processed_count >= config.n_frames:
-                break
+        )
+
+        while True:
+            if pending_phase_refinement_frames:
+                frame_id, time_fs, qm_coords_bohr, mm_coords_ang, frame_is_fine = (
+                    pending_phase_refinement_frames.pop(0)
+                )
+            else:
+                while True:
+                    try:
+                        frame_id, time_fs, qm_coords_bohr, mm_coords_ang = next(coarse_frame_iter)
+                    except StopIteration:
+                        return
+                    frame_is_fine = False
+                    # Skip frames before start_frame
+                    if frame_id < config.start_frame:
+                        continue
+                    # Stop if we've processed enough coarse frames
+                    if (
+                        config.n_frames is not None
+                        and coarse_processed_count >= config.n_frames
+                    ):
+                        return
+                    break
             
             # Convert QM coords to Angstrom
             qm_coords_ang = qm_coords_bohr / BOHR_PER_ANG
             
             # Calculate time using user-defined t0 and dt
-            time_val = config.t0_fs + frame_id * config.dt_fs
+            frame_dt_fs = (
+                config.phase_adaptive_refinement_fine_dt_fs
+                if frame_is_fine
+                else config.dt_fs
+            )
+            time_val = config.t0_fs + frame_id * frame_dt_fs
             time_str = f"t = {time_val:.3f} fs"
             
-            print(f"Frame {frame_id:05d} ({time_str})")
+            source_label = "fine" if frame_is_fine else "coarse"
+            print(f"Frame {frame_id:05d} ({time_str}, {source_label})")
+
+            if frame_is_fine and pending_phase_refinement_charge_snapshot is not None:
+                restore_fragment_charges(pending_phase_refinement_charge_snapshot)
+                pending_phase_refinement_charge_snapshot = None
+
+            current_charge_snapshot = (
+                snapshot_fragment_charges()
+                if not frame_is_fine
+                else {}
+            )
             
             # Set up work directory with current coordinates
             setup_work_directory(
@@ -2233,6 +2415,7 @@ def run_cdftbci_analysis(config_path: Path) -> None:
             charges = []
             cdftb_success = True
             retry_infos = []
+            phase_refinement_triggered = False
             
             for frag in config.fragments:
                 frag_dir = work_dir / frag.name
@@ -2406,6 +2589,8 @@ def run_cdftbci_analysis(config_path: Path) -> None:
                         D_B_eff = float("nan")
                         continuity_override: Optional[str] = None
                         phase_frame_invalid = False
+                        phase_refinement_triggered = False
+                        requested_fine_indices: List[int] = []
                         S_ao_cross_history: Optional[List[Optional[np.ndarray]]] = None
 
                         if config.phase_tracking_enabled and orb_A_data is not None and orb_B_data is not None:
@@ -2497,7 +2682,26 @@ def run_cdftbci_analysis(config_path: Path) -> None:
                                     tracker_A.last_invalid
                                     or tracker_B.last_invalid
                                 )
-                                if not phase_frame_invalid:
+                                if not frame_is_fine:
+                                    sigma_min_A_probe = min(
+                                        tracker_A.last_sigma_min_alpha,
+                                        tracker_A.last_sigma_min_beta,
+                                    )
+                                    sigma_min_B_probe = min(
+                                        tracker_B.last_sigma_min_alpha,
+                                        tracker_B.last_sigma_min_beta,
+                                    )
+                                    requested_fine_indices = _phase_adaptive_refinement_indices(
+                                        enabled=config.phase_adaptive_refinement_enabled,
+                                        previous_time_fs=phase_adaptive_previous_time_fs,
+                                        current_time_fs=time_val,
+                                        sigma_min_a=sigma_min_A_probe,
+                                        sigma_min_b=sigma_min_B_probe,
+                                        threshold=config.phase_adaptive_refinement_sigma_min_threshold,
+                                        fine_dt_fs=config.phase_adaptive_refinement_fine_dt_fs,
+                                    )
+                                    phase_refinement_triggered = bool(requested_fine_indices)
+                                if not phase_frame_invalid and not phase_refinement_triggered:
                                     s_A, D_A_raw = tracker_A.update(
                                         orb_A_data.C_alpha, orb_A_data.C_beta,
                                         orb_A_data.n_alpha, orb_A_data.n_beta,
@@ -2602,7 +2806,10 @@ def run_cdftbci_analysis(config_path: Path) -> None:
                             J_lowdin = compute_transfer_integral_unrestricted(
                                 ham.H, ham.S, method="lowdin")
 
-                        if config.overlap_matrices_binary_enabled:
+                        if (
+                            config.overlap_matrices_binary_enabled
+                            and not phase_refinement_triggered
+                        ):
                             save_frame_overlap_matrices_binary(
                                 config.overlap_matrices_binary_dir,
                                 frame_id,
@@ -2649,25 +2856,33 @@ def run_cdftbci_analysis(config_path: Path) -> None:
                             invalid_note = " INVALID" if phase_frame_invalid else ""
                             print(f"  CDFTB-CI: S_AB={ham.S_AB:+.6f}, J={J_lowdin_meV_out:+.2f} meV, ΔE={dE_eV:.4f} eV "
                                   f"(s_A={s_A:+d}, s_B={s_B:+d}){invalid_note}")
+                            if phase_refinement_triggered:
+                                print(
+                                    "  [PHASE REFINE] coarse probe is not written "
+                                    "to main output; rerunning previous interval "
+                                    f"with fine frames {requested_fine_indices}"
+                                )
                         else:
                             print(f"  CDFTB-CI: S_AB={ham.S_AB:.6f}, J={J_lowdin_meV:.2f} meV, ΔE={dE_eV:.4f} eV")
                         
                         # Write CI results (gauge-corrected if enabled)
-                        ci_file.write(f"{frame_id:5d}  {time_val:8.2f}  {J_lowdin_meV_out:12.4f}  "
-                                      f"{eigenvalues[0]:16.10f}  {eigenvalues[1]:16.10f}  {dE_eV:10.6f}\n")
-                        ci_file.flush()
+                        if not phase_refinement_triggered:
+                            ci_file.write(f"{frame_id:5d}  {time_val:8.2f}  {J_lowdin_meV_out:12.4f}  "
+                                          f"{eigenvalues[0]:16.10f}  {eigenvalues[1]:16.10f}  {dE_eV:10.6f}\n")
+                            ci_file.flush()
                         
                         # Write CI sub values
-                        ci_sub_file.write(
-                            f"{frame_id:5d}  {time_val:8.2f}  {E_A:14.10f}  {E_B:14.10f}  "
-                            f"{ham.H_AB:14.10f}  {J_direct_meV_out:12.4f}  "
-                            f"{ham.V_A:14.10f}  {ham.V_B:14.10f}  "
-                            f"{ham.N_A:6.1f}  {ham.N_B:6.1f}  {ham.S_AB:14.10f}  "
-                            f"{ham.S_AB_alpha:14.10f}  {ham.S_AB_beta:14.10f}  "
-                            f"{ham.W_BA:14.10f}  {ham.W_BA_alpha:14.10f}  {ham.W_BA_beta:14.10f}  "
-                            f"{ham.W_AB:14.10f}  {ham.W_AB_alpha:14.10f}  {ham.W_AB_beta:14.10f}\n"
-                        )
-                        ci_sub_file.flush()
+                        if not phase_refinement_triggered:
+                            ci_sub_file.write(
+                                f"{frame_id:5d}  {time_val:8.2f}  {E_A:14.10f}  {E_B:14.10f}  "
+                                f"{ham.H_AB:14.10f}  {J_direct_meV_out:12.4f}  "
+                                f"{ham.V_A:14.10f}  {ham.V_B:14.10f}  "
+                                f"{ham.N_A:6.1f}  {ham.N_B:6.1f}  {ham.S_AB:14.10f}  "
+                                f"{ham.S_AB_alpha:14.10f}  {ham.S_AB_beta:14.10f}  "
+                                f"{ham.W_BA:14.10f}  {ham.W_BA_alpha:14.10f}  {ham.W_BA_beta:14.10f}  "
+                                f"{ham.W_AB:14.10f}  {ham.W_AB_alpha:14.10f}  {ham.W_AB_beta:14.10f}\n"
+                            )
+                            ci_sub_file.flush()
 
                         if config.phase_tracking_enabled:
                             # ------- Phase-tracking sanity diagnostics -------
@@ -2681,6 +2896,25 @@ def run_cdftbci_analysis(config_path: Path) -> None:
                                 tracker_B.last_sigma_min_alpha,
                                 tracker_B.last_sigma_min_beta,
                             )
+                            if not frame_is_fine:
+                                if phase_adaptive_file is not None:
+                                    fine_frames_text = (
+                                        ",".join(str(i) for i in requested_fine_indices)
+                                        if requested_fine_indices
+                                        else "-"
+                                    )
+                                    phase_adaptive_file.write(
+                                        f"{frame_id:5d}  {time_val:8.2f}  "
+                                        f"{sigma_min_A:16.10f}  {sigma_min_B:16.10f}  "
+                                        f"{int(bool(requested_fine_indices)):7d}  "
+                                        f"{fine_frames_text}\n"
+                                    )
+                                    phase_adaptive_file.flush()
+                                enqueue_phase_refinement_frames(requested_fine_indices)
+                                if phase_refinement_triggered:
+                                    truncate_last_output_row(energy_file)
+                                    truncate_last_output_row(charge_file)
+                                    truncate_last_output_row(retry_log_file)
                             if tracker_A.last_invalid:
                                 flags.append("INVALID_A")
                                 warn_flags.append("INVALID_A")
@@ -2705,6 +2939,8 @@ def run_cdftbci_analysis(config_path: Path) -> None:
                                 flags.append("AMBIG_B")
                                 warn_flags.append("AMBIG_B")
                                 warn_counts["AMBIG_B"] += 1
+                            if phase_refinement_triggered:
+                                flags.append("REFINE_PREV")
                             if np.isfinite(sigma_min_A) and sigma_min_A < config.phase_warn_low_sigma_min:
                                 flags.append("LOW_SIG_A")
                                 warn_flags.append("LOW_SIG_A")
@@ -2739,6 +2975,7 @@ def run_cdftbci_analysis(config_path: Path) -> None:
                             # consecutive successful frames.
                             if (config.phase_warn_post_correction_flip
                                     and not phase_frame_invalid
+                                    and not phase_refinement_triggered
                                     and np.isfinite(prev_H_AB_corr)
                                     and np.isfinite(ham.H_AB)
                                     and prev_H_AB_corr != 0.0 and ham.H_AB != 0.0
@@ -2762,11 +2999,11 @@ def run_cdftbci_analysis(config_path: Path) -> None:
                             # Invalid frames are not phase references. The next
                             # valid frame is compared against the previous
                             # valid frame.
-                            if not phase_frame_invalid:
+                            if not phase_frame_invalid and not phase_refinement_triggered:
                                 prev_H_AB_corr = float(ham.H_AB)
                                 prev_S_AB_corr = float(ham.S_AB)
 
-                            if phase_file is not None:
+                            if phase_file is not None and not phase_refinement_triggered:
                                 phase_file.write(
                                     f"{frame_id:5d}  {time_val:8.2f}  "
                                     f"{s_A:+3d}  {s_B:+3d}  {gauge:+3d}  "
@@ -2792,15 +3029,20 @@ def run_cdftbci_analysis(config_path: Path) -> None:
                             # Keep recent successful QM geometries aligned with
                             # the phase reference history. Failed/SKIP frames do
                             # not advance ODIN references.
-                            if not phase_frame_invalid:
+                            if not phase_frame_invalid and not phase_refinement_triggered:
                                 history_limit = max(1, int(config.phase_reference_history))
                                 phase_qm_coords_history = (
                                     [qm_coords_ang.copy()]
                                     + phase_qm_coords_history[:history_limit - 1]
                                 )
+                                phase_adaptive_previous_time_fs = time_val
             
             # Compute spin populations for both constraint states
-            if cdftb_success and len(config.fragments) == 2:
+            if (
+                cdftb_success
+                and len(config.fragments) == 2
+                and not phase_refinement_triggered
+            ):
                 # Get number of atoms per fragment from atom_types
                 n_atoms = len(atom_types)
                 n_atoms_half = n_atoms // 2
@@ -2849,6 +3091,8 @@ def run_cdftbci_analysis(config_path: Path) -> None:
                     spin_file.flush()
             
             processed_count += 1
+            if not frame_is_fine:
+                coarse_processed_count += 1
             print()
     
     finally:
@@ -2866,6 +3110,8 @@ def run_cdftbci_analysis(config_path: Path) -> None:
             phase_file.close()
         if phase_lookback_file:
             phase_lookback_file.close()
+        if phase_adaptive_file:
+            phase_adaptive_file.close()
         if scc_log_file:
             scc_log_file.close()
         

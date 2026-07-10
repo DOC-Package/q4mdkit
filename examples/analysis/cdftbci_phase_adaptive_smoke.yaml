@@ -1,0 +1,72 @@
+input:
+  trajectory: traj/nve-1fs.dcd
+  topology: traj/picene.pdb
+  qm_atoms: traj/qmatoms-picene
+  pccharges_template: input/PCcharges-picene.dat
+  hsd_template: input/dftb_in.hsd
+output:
+  directory: output_phase_adaptive_smoke
+  energy_file: energies.dat
+  charge_file: charges.dat
+  ci_file: cdftbci.dat
+  ci_sub_file: cdftbci_sub.dat
+  overlap_matrices_binary_enabled: true
+  overlap_matrices_binary_dir: overlap_matrices
+  mode: online_ci
+  work_directory: work
+frames:
+  start: 9090
+  n_frames: 10
+  t0_fs: 0.0
+  dt_fs: 1.0
+dftb:
+  library_path: /home/takahashi/opt/dftb+/lib/libdftbplus.so
+  num_threads: 2
+  timeout: 180
+fragments:
+  - name: fragment1
+    atom_range: "1:36"
+  - name: fragment2
+    atom_range: "37:72"
+cdftb_ci:
+  enabled: true
+  N_A: 101
+  N_B: 101
+  M_A: 1.0
+  M_B: 1.0
+scc:
+  use_previous_charges: true
+  log_enabled: true
+  logfile: scc_error.dat
+  retry:
+    - {label: first, use_initial_charges: null, max_scc_iterations: 30}
+    - {label: no_init_charges, use_initial_charges: false, mixing_parameter: 0.01, max_scc_iterations: 40}
+    - {label: small_step, use_initial_charges: false, mixing_parameter: 0.01,
+       optimiser: {FIRE: {StepSize: 0.2}}, max_constr_iterations: 300, max_scc_iterations: 50}
+phase_tracking:
+  enabled: true
+  cross_overlap_mode: odin
+  corresponding_orbital_alignment: true
+  remove_translation_rotation_before_overlap: false
+  sigma_filtering_enabled: true
+  warn_high_overlap: 1.1
+  warn_low_overlap: 0.99
+  warn_low_sigma_min: 0.7
+  sigma_accept_threshold: 0.7
+  reference_history: 5
+  warn_post_correction_flip: true
+  adaptive_refinement:
+    enabled: true
+    trajectory_1fs: traj/nve-1fs.dcd
+    sigma_min_threshold: 0.7
+    fine_dt_fs: 1.0
+    log_file: adaptive_refinement.dat
+  odin:
+    executable: odin
+    sk_prefix: /home/takahashi/qmmm/sk/3ob/
+    sk_separator: "-"
+    sk_suffix: ".skf"
+    lmax:
+      C: 2
+      H: 1
+    work_subdir: odin_work
