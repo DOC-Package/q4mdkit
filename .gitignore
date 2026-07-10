@@ -73,6 +73,9 @@ Thumbs.db
 *.npy
 *.txt
 *.gen
+*.gif
+*.jpg
+*.png
 
 # backup files
 q4mdkit.compat.bak/
