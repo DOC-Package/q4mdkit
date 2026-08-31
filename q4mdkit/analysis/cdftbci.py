@@ -1015,6 +1015,11 @@ class CDFTBCIConfig(CDFTBConfig):
     # Output mode
     output_mode: str = "online_ci"  # "online_ci" or "store_frames"
     work_directory: str = "work"
+
+    # Coarse-frame sampling. dt_fs remains the physical time interval between
+    # adjacent frames in the trajectory; frame_stride controls how many
+    # trajectory frames to skip between coarse evaluations.
+    frame_stride: int = 1
     
     # CI output files
     ci_output_file: Optional[Path] = None
@@ -1127,6 +1132,24 @@ def _fine_frame_indices_between(
     return list(range(start, stop))
 
 
+def _coarse_frame_selected(*, frame_id: int, start_frame: int, stride: int) -> bool:
+    """Return True when a trajectory frame is selected for coarse processing."""
+    if stride <= 0:
+        raise ValueError("frame stride must be positive")
+    return (frame_id - start_frame) % stride == 0
+
+
+def _write_interval_ci_output(
+    *,
+    frame_is_fine: bool,
+    remaining_refinement_frames: int,
+) -> bool:
+    """Return True when a frame should be written to interval-spaced CI outputs."""
+    if remaining_refinement_frames < 0:
+        raise ValueError("remaining_refinement_frames must be non-negative")
+    return not frame_is_fine or remaining_refinement_frames == 0
+
+
 def _phase_adaptive_refinement_indices(
     *,
     enabled: bool,
@@ -1196,6 +1219,9 @@ def load_cdftbci_config(config_path: Path) -> CDFTBCIConfig:
     n_frames = frames_cfg.get('n_frames', None)
     t0_fs = frames_cfg.get('t0_fs', 0.0)
     dt_fs = frames_cfg.get('dt_fs', 4.0)
+    frame_stride = int(frames_cfg.get('stride', 1))
+    if frame_stride <= 0:
+        raise ValueError("frames.stride must be a positive integer")
     
     # Parse DFTB+ settings
     dftb_cfg = data.get('dftb', {})
@@ -1274,14 +1300,15 @@ def load_cdftbci_config(config_path: Path) -> CDFTBCIConfig:
     phase_odin_keep_files = bool(odin_cfg.get('keep_files', False))
     phase_adaptive_cfg = phase_cfg.get('adaptive_refinement', {})
     phase_adaptive_refinement_enabled = bool(phase_adaptive_cfg.get('enabled', False))
-    phase_adaptive_refinement_traj_path = None
     if phase_adaptive_cfg.get('trajectory_1fs') is not None:
         phase_adaptive_refinement_traj_path = base_dir / phase_adaptive_cfg['trajectory_1fs']
+    else:
+        phase_adaptive_refinement_traj_path = traj_path
     phase_adaptive_refinement_sigma_min_threshold = float(
         phase_adaptive_cfg.get('sigma_min_threshold', phase_warn_low_sigma_min)
     )
     phase_adaptive_refinement_fine_dt_fs = float(
-        phase_adaptive_cfg.get('fine_dt_fs', 1.0)
+        phase_adaptive_cfg.get('fine_dt_fs', dt_fs)
     )
     phase_adaptive_refinement_log_file = output_dir / phase_adaptive_cfg.get(
         'log_file',
@@ -1353,6 +1380,7 @@ def load_cdftbci_config(config_path: Path) -> CDFTBCIConfig:
         n_frames=n_frames,
         t0_fs=t0_fs,
         dt_fs=dt_fs,
+        frame_stride=frame_stride,
         dftb_library_path=dftb_library_path,
         num_threads=num_threads,
         timeout=timeout,
@@ -2183,11 +2211,6 @@ def run_cdftbci_analysis(config_path: Path) -> None:
                 "alpha_cond        beta_cond         logabs_D\n"
             )
             if config.phase_adaptive_refinement_enabled:
-                if config.phase_adaptive_refinement_traj_path is None:
-                    raise ValueError(
-                        "phase_tracking.adaptive_refinement.trajectory_1fs is required "
-                        "when phase adaptive refinement is enabled"
-                    )
                 phase_adaptive_file = open(config.phase_adaptive_refinement_log_file, "w")
                 phase_adaptive_file.write("# CDFTB-CI Phase Adaptive Refinement\n")
                 phase_adaptive_file.write(
@@ -2371,6 +2394,12 @@ def run_cdftbci_analysis(config_path: Path) -> None:
                     # Skip frames before start_frame
                     if frame_id < config.start_frame:
                         continue
+                    if not _coarse_frame_selected(
+                        frame_id=frame_id,
+                        start_frame=config.start_frame,
+                        stride=config.frame_stride,
+                    ):
+                        continue
                     # Stop if we've processed enough coarse frames
                     if (
                         config.n_frames is not None
@@ -2390,6 +2419,10 @@ def run_cdftbci_analysis(config_path: Path) -> None:
             )
             time_val = config.t0_fs + frame_id * frame_dt_fs
             time_str = f"t = {time_val:.3f} fs"
+            write_interval_ci_output = _write_interval_ci_output(
+                frame_is_fine=frame_is_fine,
+                remaining_refinement_frames=len(pending_phase_refinement_frames),
+            )
             
             source_label = "fine" if frame_is_fine else "coarse"
             print(f"Frame {frame_id:05d} ({time_str}, {source_label})")
@@ -2525,11 +2558,12 @@ def run_cdftbci_analysis(config_path: Path) -> None:
                 if not cdftb_success:
                     # CDFTB failed - write NaN values
                     print(f"  CDFTB-CI: SKIPPED (CDFTB convergence failed)")
-                    ci_file.write(f"{frame_id:5d}  {time_val:8.2f}  {'nan':>12s}  "
-                                  f"{'nan':>16s}  {'nan':>16s}  {'nan':>10s}\n")
-                    ci_file.flush()
-                    ci_sub_file.write(f"{frame_id:5d}  {time_val:8.2f}  " + "  ".join(["nan"] * 17) + "\n")
-                    ci_sub_file.flush()
+                    if write_interval_ci_output:
+                        ci_file.write(f"{frame_id:5d}  {time_val:8.2f}  {'nan':>12s}  "
+                                      f"{'nan':>16s}  {'nan':>16s}  {'nan':>10s}\n")
+                        ci_file.flush()
+                        ci_sub_file.write(f"{frame_id:5d}  {time_val:8.2f}  " + "  ".join(["nan"] * 17) + "\n")
+                        ci_sub_file.flush()
                     # Keep previous-frame MOs in the trackers as the phase
                     # reference; the next successful frame will overwrite
                     # them. Just record a SKIP marker in the phase log.
@@ -2555,9 +2589,10 @@ def run_cdftbci_analysis(config_path: Path) -> None:
                     if ci_error:
                         print(f"  CDFTB-CI: ERROR - {ci_error}")
                         # Write NaN values
-                        ci_file.write(f"{frame_id:5d}  {time_val:8.2f}  {'nan':>12s}  "
-                                      f"{'nan':>16s}  {'nan':>16s}  {'nan':>10s}\n")
-                        ci_sub_file.write(f"{frame_id:5d}  {time_val:8.2f}  " + "  ".join(["nan"] * 17) + "\n")
+                        if write_interval_ci_output:
+                            ci_file.write(f"{frame_id:5d}  {time_val:8.2f}  {'nan':>12s}  "
+                                          f"{'nan':>16s}  {'nan':>16s}  {'nan':>10s}\n")
+                            ci_sub_file.write(f"{frame_id:5d}  {time_val:8.2f}  " + "  ".join(["nan"] * 17) + "\n")
                         if config.phase_tracking_enabled and phase_file is not None:
                             phase_file.write(
                                 f"{frame_id:5d}  {time_val:8.2f}  "
@@ -2866,13 +2901,13 @@ def run_cdftbci_analysis(config_path: Path) -> None:
                             print(f"  CDFTB-CI: S_AB={ham.S_AB:.6f}, J={J_lowdin_meV:.2f} meV, ΔE={dE_eV:.4f} eV")
                         
                         # Write CI results (gauge-corrected if enabled)
-                        if not phase_refinement_triggered:
+                        if not phase_refinement_triggered and write_interval_ci_output:
                             ci_file.write(f"{frame_id:5d}  {time_val:8.2f}  {J_lowdin_meV_out:12.4f}  "
                                           f"{eigenvalues[0]:16.10f}  {eigenvalues[1]:16.10f}  {dE_eV:10.6f}\n")
                             ci_file.flush()
                         
                         # Write CI sub values
-                        if not phase_refinement_triggered:
+                        if not phase_refinement_triggered and write_interval_ci_output:
                             ci_sub_file.write(
                                 f"{frame_id:5d}  {time_val:8.2f}  {E_A:14.10f}  {E_B:14.10f}  "
                                 f"{ham.H_AB:14.10f}  {J_direct_meV_out:12.4f}  "

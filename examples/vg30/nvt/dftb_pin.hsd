@@ -1,0 +1,214 @@
+Geometry = {
+  xyzFormat = {
+77
+title
+C     30.040756225586  19.414724349976  20.061500549316
+C     28.740638732910  19.931852340698  20.148723602295
+C     28.474447250366  21.170703887939  19.503831863403
+C     29.448232650757  21.985031127930  19.054981231689
+C     30.798997879028  21.496929168701  18.966623306274
+C     31.049842834473  20.196569442749  19.452089309692
+C     26.975944519043  21.489116668701  19.654407501221
+C     26.626670837402  20.387897491455  20.717647552490
+N     27.604145050049  19.515424728394  20.889131546021
+C     25.347652435303  20.069324493408  21.284658432007
+C     24.080135345459  20.837875366211  21.175691604614
+C     22.965810775757  20.582933425903  21.903581619263
+C     21.801841735840  21.344562530518  21.670288085938
+C     20.567607879639  21.141977310181  22.505245208740
+C     20.521472930908  19.902774810791  23.466703414917
+C     21.612033843994  18.918888092041  23.116138458252
+C     22.898433685303  19.662984848022  23.155239105225
+C     19.531875610352  22.101806640625  22.531995773315
+C     18.316967010498  21.869239807129  23.204202651978
+C     17.385046005249  22.825180053711  23.595159530640
+N     16.181192398071  22.426753997803  24.291170120239
+C     15.489591598511  23.628702163696  24.732809066772
+C     16.068035125732  24.759666442871  24.139406204224
+C     17.176387786865  24.291131973267  23.207221984863
+C     14.399515151978  23.822475433350  25.634883880615
+C     13.904725074768  25.051603317261  25.878030776978
+C     14.563484191895  26.232034683228  25.399351119995
+C     15.563765525818  26.048629760742  24.427940368652
+H     13.045232772827  25.210435867310  26.522577285767
+C     15.998365402222  21.159975051880  24.906633377075
+C     18.450172424316  25.205526351929  23.355941772461
+Cl    21.824825286865  22.500003814697  20.387037277222
+C     27.585754394531  18.157079696655  21.576465606689
+C     26.355754852295  21.265890121460  18.276920318604
+H     32.024753570557  19.755231857300  19.267251968384
+H     18.177892684937  26.248870849609  23.158588409424
+H     19.240789413452  24.882602691650  22.668701171875
+H     18.913537979126  25.150199890137  24.347850799561
+H     13.939699172974  22.972776412964  26.130847930908
+C     14.234261512756  27.636507034302  25.849517822266
+H     16.023565292358  26.917932510376  23.967187881470
+H     16.933982849121  20.958536148071  25.442569732666
+H     15.639440536499  20.489643096924  24.116054534912
+H     15.166341781616  21.215160369873  25.619289398193
+H     18.240213394165  20.859371185303  23.603076934814
+H     19.547319412231  22.930498123169  21.826400756836
+H     21.363735198975  18.472860336304  22.144130706787
+H     22.911603927612  20.316064834595  24.037675857544
+H     20.646049499512  20.209468841553  24.513511657715
+H     21.619131088257  18.139160156250  23.889028549194
+H     23.817276000977  19.064786911011  23.212432861328
+H     19.544658660889  19.419050216675  23.335460662842
+H     24.132942199707  21.648345947266  20.450996398926
+H     25.284469604492  19.123517990112  21.818696975708
+H     25.305278778076  21.576499938965  18.317825317383
+H     26.516368865967  20.260341644287  17.871057510376
+H     26.841886520386  22.008731842041  17.633865356445
+H     29.172328948975  22.937175750732  18.611484527588
+H     30.180139541626  18.434616088867  20.507993698120
+C     31.807022094727  22.337814331055  18.272367477417
+H     27.436687469482  18.317308425903  22.651311874390
+H     26.680931091309  17.628543853760  21.252216339111
+H     28.489227294922  17.563697814941  21.389850616455
+C     16.784225463867  24.197978973389  21.657178878784
+H     17.566202163696  23.688795089722  21.081939697266
+H     15.866967201233  23.597784042358  21.664926528931
+H     16.676088333130  25.238683700562  21.330226898193
+O     13.098746299744  27.807609558105  26.667690277100
+O     14.992407798767  28.516414642334  25.503467559814
+H     12.761363029480  28.711145401001  26.542976379395
+C     26.670246124268  22.905061721802  20.187215805054
+H     27.463132858276  23.230524063110  20.870635986328
+H     26.691720962524  23.591489791870  19.332811355591
+H     25.712835311890  23.009574890137  20.710758209229
+O     33.066116333008  21.795198440552  18.324428558350
+O     31.515829086304  23.267955780029  17.519809722900
+H     33.726936340332  22.180345535278  17.723815917969
+  }
+}
+Hamiltonian = DFTB {
+  Charge = 1
+  ElectricField = {
+    PointCharges = {
+      GaussianBlurWidth [Angstrom] = 0.0
+      CoordsAndCharges [Angstrom] = DirectRead {
+        Records = 5520
+        File = 'PCcharges.dat'
+      }
+    }
+  }
+  Scc = Yes
+  MaxSCCIterations = 300
+  ThirdOrderFull = No
+  ThirdOrder = No
+  SlaterKosterFiles = {
+    C-C = '/home/takahashi/qmmm/sk/opv/b3lyp/C-C.skf'
+    C-H = '/home/takahashi/qmmm/sk/opv/b3lyp/C-H.skf'
+    C-N = '/home/takahashi/qmmm/sk/opv/b3lyp/C-N.skf'
+    C-O = '/home/takahashi/qmmm/sk/opv/b3lyp/C-O.skf'
+    C-Cl = '/home/takahashi/qmmm/sk/opv/b3lyp/C-Cl.skf'
+    H-C = '/home/takahashi/qmmm/sk/opv/b3lyp/H-C.skf'
+    H-H = '/home/takahashi/qmmm/sk/opv/b3lyp/H-H.skf'
+    H-N = '/home/takahashi/qmmm/sk/opv/b3lyp/H-N.skf'
+    H-O = '/home/takahashi/qmmm/sk/opv/b3lyp/H-O.skf'
+    H-Cl = '/home/takahashi/qmmm/sk/opv/b3lyp/H-Cl.skf'
+    N-C = '/home/takahashi/qmmm/sk/opv/b3lyp/N-C.skf'
+    N-H = '/home/takahashi/qmmm/sk/opv/b3lyp/N-H.skf'
+    N-N = '/home/takahashi/qmmm/sk/opv/b3lyp/N-N.skf'
+    N-O = '/home/takahashi/qmmm/sk/opv/b3lyp/N-O.skf'
+    N-Cl = '/home/takahashi/qmmm/sk/opv/b3lyp/N-Cl.skf'
+    O-C = '/home/takahashi/qmmm/sk/opv/b3lyp/O-C.skf'
+    O-H = '/home/takahashi/qmmm/sk/opv/b3lyp/O-H.skf'
+    O-N = '/home/takahashi/qmmm/sk/opv/b3lyp/O-N.skf'
+    O-O = '/home/takahashi/qmmm/sk/opv/b3lyp/O-O.skf'
+    O-Cl = '/home/takahashi/qmmm/sk/opv/b3lyp/O-Cl.skf'
+    Cl-C = '/home/takahashi/qmmm/sk/opv/b3lyp/Cl-C.skf'
+    Cl-H = '/home/takahashi/qmmm/sk/opv/b3lyp/Cl-H.skf'
+    Cl-N = '/home/takahashi/qmmm/sk/opv/b3lyp/Cl-N.skf'
+    Cl-O = '/home/takahashi/qmmm/sk/opv/b3lyp/Cl-O.skf'
+    Cl-Cl = '/home/takahashi/qmmm/sk/opv/b3lyp/Cl-Cl.skf'
+    Prefix = ""
+  }
+  MaxAngularMomentum = {
+    O = "p"
+    H = "s"
+    Cl = "d"
+    C = "p"
+    N = "p"
+  }
+  Dispersion = DFTD3 {
+    Damping = BeckeJohnson {
+      a1 = 0.497
+      a2 = 3.622
+    }
+    s6 = 1.0
+    s8 = 0.01
+    cutoff = 94.868329805051374
+    cutoffcn = 40.000000000000000
+    threebody = No
+    hhrepulsion = No
+  }
+  Hybrid = CAM {
+    Screening = MatrixBased {}
+  }
+  PolynomialRepulsive = {}
+  ShellResolvedSCC = No
+  OldSKInterpolation = No
+  ReadInitialCharges = No
+  InitialCharges = {}
+  SCCTolerance = 1.0000000000000001E-005
+  ConvergentSCCOnly = Yes
+  HCorrection = None {}
+  SpinPolarisation = {}
+  Solver = RelativelyRobust {}
+  OnSiteCorrection = {}
+  Solvation = {}
+  ElectronicConstraints = {}
+  Electrostatics = GammaFunctional {}
+  Mdftb = None {}
+  Differentiation = FiniteDiff {
+    Delta = 1.2207031250000000E-004
+  }
+  ForceEvaluation = "Traditional"
+  Mixer = Broyden {
+    MixingParameter = 0.20000000000000001
+    InverseJacobiWeight = 1.0000000000000000E-002
+    MinimalWeight = 1.0000000000000000
+    MaximalWeight = 100000.00000000000
+    WeightFactor = 1.0000000000000000E-002
+  }
+  Filling = Fermi {
+    Temperature = 0.0000000000000000
+  }
+}
+Options = {
+  WriteDetailedOut = Yes
+  WriteAutotestTag = No
+  WriteDetailedXML = No
+  WriteResultsTag = No
+  RestartFrequency = 20
+  RandomSeed = 0
+  WriteHS = No
+  WriteRealHS = No
+  MinimiseMemoryUsage = No
+  ShowFoldedCoords = No
+  TimingVerbosity = 1
+  WriteCharges = Yes
+  WriteChargesAsText = No
+  BinaryAccessTypes = {
+ "stream"
+  }
+}
+ParserOptions = {
+  ParserVersion = 14
+  WriteHSDInput = Yes
+  StopAfterParsing = No
+  IgnoreUnprocessedNodes = No
+}
+Analysis = {
+  PrintForces = Yes
+  ProjectStates = {}
+  WriteEigenvectors = No
+  WriteBandOut = Yes
+  MullikenAnalysis = Yes
+  WriteNetCharges = No
+  AtomResolvedEnergies = No
+}
+Reks = None {}
+Driver = {}
+ExcitedState = {}

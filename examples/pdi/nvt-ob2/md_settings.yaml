@@ -1,0 +1,17 @@
+# MD Settings Configuration File
+
+# MD parameters
+md:
+  timestep: 0.0005          # ps (1.0 fs)
+  traj_frequency: 100       # steps
+  nvt:
+    temperature: 300.0       # K
+    coupling_frequency: 1.0  # ps
+  simulation_time: 100.0       # ps
+  special_wrapping: true  # Let ASH/mdtraj wrap coordinates each step
+  special_wrapping_updatepos: true  # Push wrapped coordinates back to OpenMM 
+  wrapping_atoms_file: "../input/qmatoms" 
+
+# Output settings
+output:
+  directory: "output"

@@ -1,0 +1,63 @@
+Geometry = { xyzFormat {
+  <<< 'dftb_.xyz' 
+}
+}
+Hamiltonian = DFTB{
+Charge = 0
+ElectricField = { 
+  PointCharges = { 
+    GaussianBlurWidth [Angstrom] = 0.0
+    CoordsAndCharges [Angstrom] = DirectRead { 
+    Records = 2040
+    File = 'PCcharges.dat'
+    }
+  }
+}
+  Scc = Yes
+  MaxSCCIterations = 300
+  ThirdOrderFull = No
+  ThirdOrder = No
+  SlaterKosterFiles {
+    C-C = '/home/borrelli/qmmm/sk/ob2/split/C-C.skf'
+    C-H = '/home/borrelli/qmmm/sk/ob2/split/C-H.skf'
+    H-C = '/home/borrelli/qmmm/sk/ob2/split/H-C.skf'
+    H-H = '/home/borrelli/qmmm/sk/ob2/split/H-H.skf'
+    C-N = '/home/borrelli/qmmm/sk/ob2/split/C-N.skf'
+    N-C = '/home/borrelli/qmmm/sk/ob2/split/N-C.skf'
+    N-N = '/home/borrelli/qmmm/sk/ob2/split/N-N.skf'
+    N-H = '/home/borrelli/qmmm/sk/ob2/split/N-H.skf'
+    H-N = '/home/borrelli/qmmm/sk/ob2/split/H-N.skf'
+    C-O = '/home/borrelli/qmmm/sk/ob2/split/C-O.skf'
+    O-C = '/home/borrelli/qmmm/sk/ob2/split/O-C.skf'
+    O-O = '/home/borrelli/qmmm/sk/ob2/split/O-O.skf'
+    N-O = '/home/borrelli/qmmm/sk/ob2/split/N-O.skf'
+    O-N = '/home/borrelli/qmmm/sk/ob2/split/O-N.skf'
+    H-O = '/home/borrelli/qmmm/sk/ob2/split/H-O.skf'
+    O-H = '/home/borrelli/qmmm/sk/ob2/split/O-H.skf'
+  }
+  MaxAngularMomentum {
+    H = "s"
+    N = "p"
+    O = "p"
+    C = "p"
+  }
+  Dispersion = DFTD3 {
+    Damping = BeckeJohnson {
+      a1 = 0.497
+      a2 = 3.622
+    }
+    s6 = 1.0
+    s8 = 0.01
+  }
+  RangeSeparated = LC {
+    Screening = MatrixBased {
+    }
+  }
+  Mixer = Broyden {
+    MixingParameter = 0.2
+  }
+  ReadInitialCharges = Yes
+}
+Options { WriteDetailedOut = Yes }
+ParserOptions { ParserVersion = 10 }
+Analysis { PrintForces = Yes }

@@ -1,0 +1,14 @@
+# Diagnostic QM/MM NVT run without a barostat
+md:
+  timestep: 0.0005          # ps (0.5 fs)
+  traj_frequency: 50        # steps (25 fs)
+  nvt:
+    temperature: 300.0      # K
+    coupling_frequency: 1.0 # 1/ps
+  simulation_time: 6.0      # ps
+  special_wrapping: true
+  special_wrapping_updatepos: true
+  wrapping_atoms_file: "../input/qmatoms"
+
+output:
+  directory: "output"

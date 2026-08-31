@@ -3,7 +3,7 @@ input:
   topology: traj/picene.pdb
   qm_atoms: traj/qmatoms-picene
   pccharges_template: input/PCcharges-picene.dat
-  hsd_template: input/dftb_in.hsd
+  hsd_template: input/dftb_in_cation.hsd
 output:
   directory: output_phase_adaptive_smoke
   energy_file: energies.dat
@@ -15,10 +15,11 @@ output:
   mode: online_ci
   work_directory: work
 frames:
-  start: 9090
-  n_frames: 10
+  start: 0
+  n_frames: 40
   t0_fs: 0.0
   dt_fs: 1.0
+  stride: 1
 dftb:
   library_path: /home/takahashi/opt/dftb+/lib/libdftbplus.so
   num_threads: 2
@@ -57,9 +58,7 @@ phase_tracking:
   warn_post_correction_flip: true
   adaptive_refinement:
     enabled: true
-    trajectory_1fs: traj/nve-1fs.dcd
     sigma_min_threshold: 0.7
-    fine_dt_fs: 1.0
     log_file: adaptive_refinement.dat
   odin:
     executable: odin

@@ -1,0 +1,21 @@
+source leaprc.gaff2
+
+# Solute
+VG3 = loadmol2 ../input-sub/vg30-6-cl_gaff2.mol2
+loadamberparams ../input-sub/vg30-6-cl_gaff2.frcmod
+
+# Solvent
+ACE = loadmol2 ../../solvent/acetonitrile/acetonitrile_gaff2.mol2
+loadamberparams ../../solvent/acetonitrile/acetonitrile_gaff2.frcmod
+
+# System
+SYS = loadpdb vg30_acetonitrile.pdb
+
+# Box
+set SYS box {43.2 43.2 43.2}
+
+check SYS
+
+saveAmberParm SYS vg30_acetonitrile.prmtop vg30_acetonitrile.inpcrd
+savePDB SYS vg30_acetonitrile_leap.pdb
+quit

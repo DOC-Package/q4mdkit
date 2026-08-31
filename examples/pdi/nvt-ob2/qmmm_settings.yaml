@@ -1,0 +1,76 @@
+# QM/MM Settings Configuration File
+
+# File paths
+paths:
+  sk_dir: "/home/borrelli/qmmm/sk/ob2/split"
+  amber_prmtop: "../input/pdi_acetonitrile.prmtop"
+  pdbfile: "../input/pdi_acetonitrile.pdb"
+  qatoms: "../input/qmatoms"
+  boxfile: "../input/pdi_acetonitrile.box"
+
+# Parallel settings
+parallel:
+  numcores_qm: 4
+  numcores_mm: 4
+
+# QM region settings
+qm:
+  charge: 0
+  mult: 1
+
+# DFTB parameters
+dftb:
+  slater_koster_files:
+    C-C: "{sk_dir}/C-C.skf"
+    C-H: "{sk_dir}/C-H.skf"
+    H-C: "{sk_dir}/H-C.skf"
+    H-H: "{sk_dir}/H-H.skf"
+    C-N: "{sk_dir}/C-N.skf"
+    N-C: "{sk_dir}/N-C.skf"
+    N-N: "{sk_dir}/N-N.skf"
+    N-H: "{sk_dir}/N-H.skf"
+    H-N: "{sk_dir}/H-N.skf"
+    C-O: "{sk_dir}/C-O.skf"
+    O-C: "{sk_dir}/O-C.skf"
+    O-O: "{sk_dir}/O-O.skf"
+    N-O: "{sk_dir}/N-O.skf"
+    O-N: "{sk_dir}/O-N.skf"
+    H-O: "{sk_dir}/H-O.skf"
+    O-H: "{sk_dir}/O-H.skf"
+
+  third_order_full: false
+
+  max_scc_iterations: 300
+
+  mixer:
+    method: Broyden          # Broyden / Anderson / Simple / DIIS
+    params:
+      MixingParameter: 0.2
+  
+  read_initial_charges: true
+  scc_log: true
+  energy_log: true
+
+  # Long-range corrected DFTB
+  range_separated:
+    method: LC            
+    screening: MatrixBased
+    screening_params: {}
+
+  dispersion: "DFTD3"
+  dispersion_params:
+    Damping:
+      type: "BeckeJohnson"
+      a1: 0.497
+      a2: 3.622
+    s6: 1.0
+    s8: 0.010
+
+# OpenMM settings
+openmm:
+  periodic: true
+  periodic_nonbonded_cutoff: 9.0
+  use_boxfile: true
+  autoconstraints: HBonds
+  hydrogenmass: 1.0
+  platform: "CPU"

@@ -26,7 +26,73 @@ import os
 import signal
 import sys
 from pathlib import Path
-from q4mdkit.analysis.cdftbci import run_cdftbci_analysis
+
+
+DEFAULT_PYTHON = Path("/home/takahashi/anaconda3/envs/mydftbplus/bin/python")
+
+
+def _has_dftbplus_module() -> bool:
+    try:
+        import dftbplus  # noqa: F401
+    except ModuleNotFoundError:
+        return False
+    return True
+
+
+def _reexec_with_dftbplus_python_if_needed() -> None:
+    if _has_dftbplus_module():
+        return
+    if Path(sys.executable).resolve() == DEFAULT_PYTHON.resolve():
+        return
+    if not DEFAULT_PYTHON.exists():
+        return
+    os.execv(str(DEFAULT_PYTHON), [str(DEFAULT_PYTHON), *sys.argv])
+
+
+def _prepend_ld_library_path(path: Path) -> None:
+    lib_dir = str(path.parent)
+    current = os.environ.get("LD_LIBRARY_PATH", "")
+    parts = [p for p in current.split(":") if p]
+    if lib_dir not in parts:
+        os.environ["LD_LIBRARY_PATH"] = ":".join([lib_dir, *parts])
+        os.environ["Q4MDKIT_REEXEC_FOR_DFTB_LIBS"] = "1"
+
+
+def _prepend_ld_preload(paths) -> None:
+    current = os.environ.get("LD_PRELOAD", "")
+    parts = [p for p in current.split(":") if p]
+    changed = False
+    for path in reversed([str(p) for p in paths if Path(p).exists()]):
+        if path not in parts:
+            parts.insert(0, path)
+            changed = True
+    if changed:
+        os.environ["LD_PRELOAD"] = ":".join(parts)
+        os.environ["Q4MDKIT_REEXEC_FOR_DFTB_LIBS"] = "1"
+
+
+def _configure_dftb_runtime_environment(config_path: Path) -> None:
+    """Expose DFTB+ dependent shared libraries before worker processes start."""
+    try:
+        import yaml
+    except ModuleNotFoundError:
+        return
+    try:
+        with config_path.open() as handle:
+            data = yaml.safe_load(handle) or {}
+    except OSError:
+        return
+    library_path = data.get("dftb", {}).get("library_path")
+    if library_path:
+        lib_path = Path(library_path)
+        _prepend_ld_library_path(lib_path)
+        _prepend_ld_preload(
+            [
+                Path("/lib/x86_64-linux-gnu/libgomp.so.1"),
+                Path("/opt/intel/oneapi/mkl/2025.0/lib/libmkl_gnu_thread.so.2"),
+                Path("/opt/intel/oneapi/mkl/2025.0/lib/libmkl_core.so.2"),
+            ]
+        )
 
 
 def _install_group_cleanup():
@@ -48,7 +114,7 @@ def _install_group_cleanup():
     signal.signal(signal.SIGTERM, _graceful_exit)
 
 
-def _kill_process_group():
+def _terminate_process_group():
     """Send SIGTERM to the whole process group, then SIGKILL after a short
     grace period for anything that ignored SIGTERM."""
     pgid = os.getpgrp()
@@ -63,18 +129,9 @@ def _kill_process_group():
         return
     except Exception:
         pass
-    # Brief grace, then force-kill stragglers (DFTB+ rarely honors SIGTERM mid-SCC)
-    import time
-    time.sleep(1.0)
-    try:
-        os.killpg(pgid, signal.SIGKILL)
-    except Exception:
-        pass
 
 
 def main():
-    _install_group_cleanup()
-
     parser = argparse.ArgumentParser(
         description="Run CDFTB with online CDFTB-CI calculation"
     )
@@ -91,11 +148,20 @@ def main():
         print(f"Error: Configuration file not found: {config_path}")
         sys.exit(1)
 
+    _configure_dftb_runtime_environment(config_path)
+    if os.environ.pop("Q4MDKIT_REEXEC_FOR_DFTB_LIBS", None) == "1":
+        os.execv(sys.executable, [sys.executable, *sys.argv])
+
+    _reexec_with_dftbplus_python_if_needed()
+    _install_group_cleanup()
+
+    from q4mdkit.analysis.cdftbci import run_cdftbci_analysis
+
     print(f"Running CDFTB-CI analysis with config: {config_path}")
     try:
         run_cdftbci_analysis(config_path)
     finally:
-        _kill_process_group()
+        _terminate_process_group()
 
 
 if __name__ == "__main__":

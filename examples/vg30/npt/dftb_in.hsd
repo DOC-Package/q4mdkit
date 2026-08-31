@@ -1,0 +1,69 @@
+Geometry = { xyzFormat {
+  <<< 'dftb_.xyz' 
+}
+}
+Hamiltonian = DFTB{
+Charge = 1
+ElectricField = { 
+  PointCharges = { 
+    GaussianBlurWidth [Angstrom] = 0.0
+    CoordsAndCharges [Angstrom] = DirectRead { 
+    Records = 5520
+    File = 'PCcharges.dat'
+    }
+  }
+}
+  Scc = Yes
+  MaxSCCIterations = 300
+  ThirdOrderFull = No
+  ThirdOrder = No
+  SlaterKosterFiles {
+    C-C = '/home/takahashi/qmmm/sk/opv/b3lyp/C-C.skf'
+    C-H = '/home/takahashi/qmmm/sk/opv/b3lyp/C-H.skf'
+    C-N = '/home/takahashi/qmmm/sk/opv/b3lyp/C-N.skf'
+    C-O = '/home/takahashi/qmmm/sk/opv/b3lyp/C-O.skf'
+    C-Cl = '/home/takahashi/qmmm/sk/opv/b3lyp/C-Cl.skf'
+    H-C = '/home/takahashi/qmmm/sk/opv/b3lyp/H-C.skf'
+    H-H = '/home/takahashi/qmmm/sk/opv/b3lyp/H-H.skf'
+    H-N = '/home/takahashi/qmmm/sk/opv/b3lyp/H-N.skf'
+    H-O = '/home/takahashi/qmmm/sk/opv/b3lyp/H-O.skf'
+    H-Cl = '/home/takahashi/qmmm/sk/opv/b3lyp/H-Cl.skf'
+    N-C = '/home/takahashi/qmmm/sk/opv/b3lyp/N-C.skf'
+    N-H = '/home/takahashi/qmmm/sk/opv/b3lyp/N-H.skf'
+    N-N = '/home/takahashi/qmmm/sk/opv/b3lyp/N-N.skf'
+    N-O = '/home/takahashi/qmmm/sk/opv/b3lyp/N-O.skf'
+    N-Cl = '/home/takahashi/qmmm/sk/opv/b3lyp/N-Cl.skf'
+    O-C = '/home/takahashi/qmmm/sk/opv/b3lyp/O-C.skf'
+    O-H = '/home/takahashi/qmmm/sk/opv/b3lyp/O-H.skf'
+    O-N = '/home/takahashi/qmmm/sk/opv/b3lyp/O-N.skf'
+    O-O = '/home/takahashi/qmmm/sk/opv/b3lyp/O-O.skf'
+    O-Cl = '/home/takahashi/qmmm/sk/opv/b3lyp/O-Cl.skf'
+    Cl-C = '/home/takahashi/qmmm/sk/opv/b3lyp/Cl-C.skf'
+    Cl-H = '/home/takahashi/qmmm/sk/opv/b3lyp/Cl-H.skf'
+    Cl-N = '/home/takahashi/qmmm/sk/opv/b3lyp/Cl-N.skf'
+    Cl-O = '/home/takahashi/qmmm/sk/opv/b3lyp/Cl-O.skf'
+    Cl-Cl = '/home/takahashi/qmmm/sk/opv/b3lyp/Cl-Cl.skf'
+  }
+  MaxAngularMomentum {
+    C = "p"
+    H = "s"
+    O = "p"
+    N = "p"
+    Cl = "d"
+  }
+  Dispersion = DFTD3 {
+    Damping = BeckeJohnson {
+      a1 = 0.497
+      a2 = 3.622
+    }
+    s6 = 1.0
+    s8 = 0.01
+  }
+  Hybrid = CAM {
+    Screening = MatrixBased {
+    }
+  }
+}
+Options { WriteDetailedOut = Yes }
+ParserOptions { ParserVersion = 10 }
+Analysis { PrintForces = Yes }

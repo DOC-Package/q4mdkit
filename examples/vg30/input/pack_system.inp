@@ -1,0 +1,18 @@
+tolerance 2.0
+filetype pdb
+output vg30_acetonitrile.pdb
+
+# Solute
+structure ../input-sub/vg30-6-cl.pdb
+  number 1
+  center
+  fixed 21.6 21.6 21.6 0. 0. 0.
+  resnumbers 2
+end structure
+
+# Solvent
+structure ../../solvent/acetonitrile/acetonitrile.pdb
+  number 920
+  inside box 0. 0. 0. 43.2 43.2 43.2
+  resnumbers 2
+end structure
