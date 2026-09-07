@@ -76,3 +76,31 @@ try:
     )
 except ImportError:
     pass
+
+try:
+    from .nwchem_cdft import (
+        NWChemCDFTConfig,
+        NWChemConstraint,
+        build_cdft_directive,
+        load_config as load_nwchem_cdft_config,
+        parse_nwchem_energy,
+        parse_nwchem_populations,
+        render_nwchem_input,
+        run_nwchem_cdft_analysis,
+    )
+except ImportError:
+    pass
+
+try:
+    from .nwchem_cdftci import (
+        NWChemCDFTCIConfig,
+        NWChemCDFTCIState,
+        build_nwchem_orbital_data,
+        compute_nwchem_cdftci_from_outputs,
+        load_cdftci_config,
+        parse_nwchem_mo_coefficients,
+        reconstruct_ao_overlap,
+        run_nwchem_cdftci_analysis,
+    )
+except ImportError:
+    pass

@@ -1,0 +1,44 @@
+# NWChem CDFT-CI (two-state) settings for the pentacene QM/MM example.
+#
+# QM region: 72 atoms = two pentacene molecules (1..36 and 37..72).
+# The two diabatic states differ only in where the charge constraint is placed.
+
+input:
+  trajectory: "traj/nve.dcd"
+  topology: "traj/pentacene.pdb"
+  qm_atoms: "traj/qmatoms"
+  basis: "6-31G*"
+  xc: "b3lyp"
+  charge: 0
+  multiplicity: 1
+
+output:
+  directory: "output_nwchem_cdftci_631g"
+  work_directory: "work"
+
+frames:
+  start: 0
+  n_frames: 1
+  t0_fs: 0.0
+  dt_fs: 1.0
+
+nwchem:
+  binary: "/usr/bin/nwchem"
+  timeout: 3600
+
+# Each state uses a Mulliken charge constraint on one fragment.  Set `spin`
+# to a non-zero value to also add a spin constraint on the same atoms.
+cdftci:
+  state_a:
+    name: "donor"
+    atoms: "1:36"
+    charge: 1.0
+    spin: 0.0
+    population: "lowdin"
+  state_b:
+    name: "acceptor"
+    atoms: "37:72"
+    charge: 1.0
+    spin: 0.0
+    population: "lowdin"
+  coupling_file: "cdftci.dat"

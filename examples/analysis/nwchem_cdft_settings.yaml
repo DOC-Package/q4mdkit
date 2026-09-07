@@ -1,0 +1,43 @@
+# NWChem constrained-DFT (CDFT) analysis settings.
+#
+# Both charge and spin constraints are supported. Atom ranges follow NWChem's
+# 1-indexed inclusive syntax, e.g. "1:36".
+
+# Input paths are resolved relative to this config file directory.
+input:
+  trajectory: "traj/nve.dcd"       # Trajectory file (DCD format)
+  topology: "traj/pentacene.pdb"         # Topology file (PDB)
+  qm_atoms: "traj/qmatoms"        # QM atom indices (1-indexed, one per line)
+  basis: "6-31G*"                  # NWChem basis-set label
+  xc: "b3lyp"                      # Exchange-correlation functional
+  charge: 0                        # Total molecular charge
+  multiplicity: 1                  # Spin multiplicity
+  # pointcharges_template: "input/PCcharges.dat"  # optional x y z q records
+
+output:
+  directory: "output_nwchem"       # Base output directory
+  energy_file: "energies.dat"      # Relative to directory above
+  population_file: "populations.dat"
+  work_directory: "work"           # Per-frame NWChem input/output
+
+frames:
+  start: 0                         # First frame (0-indexed)
+  n_frames: 100                    # Number of frames (null = all remaining)
+  t0_fs: 0.0                       # Time of frame `start` in femtoseconds
+  dt_fs: 1.0                       # Time step in femtoseconds
+
+nwchem:
+  binary: "nwchem"                 # NWChem executable (or absolute path)
+  timeout: 3600                    # Per-frame subprocess timeout in seconds
+  # scratch_dir: "/scratch"        # Optional NWChem scratch directory
+
+# One entry per CDFT constraint.
+constraints:
+  - kind: charge
+    atoms: "1:36"
+    value: 1.0
+    population: lowdin             # lowdin | becke | mulliken
+  - kind: spin
+    atoms: "1:36"
+    value: 1.0
+    population: lowdin

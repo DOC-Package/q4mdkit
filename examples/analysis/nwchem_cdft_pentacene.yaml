@@ -1,0 +1,39 @@
+# NWChem constrained-DFT (CDFT) for the pentacene QM/MM example.
+#
+# QM region: 72 atoms = two pentacene molecules (indices from traj/qmatoms).
+# The QM atoms are renumbered 1..72 in the generated input; atoms 1:36 are the
+# first molecule and 37:72 are the second.
+input:
+  trajectory: "traj/nve.dcd"
+  topology: "traj/pentacene.pdb"
+  qm_atoms: "traj/qmatoms"
+  basis: "3-21G"
+  xc: "b3lyp"
+  charge: 0
+  multiplicity: 1
+
+output:
+  directory: "output_nwchem_pentacene"
+  energy_file: "energies.dat"
+  population_file: "populations.dat"
+  work_directory: "work"
+
+frames:
+  start: 0
+  n_frames: 1
+  t0_fs: 0.0
+  dt_fs: 1.0
+
+nwchem:
+  binary: "/usr/bin/nwchem"
+  timeout: 3600
+
+constraints:
+  - kind: charge
+    atoms: "1:36"
+    value: 1.0
+    population: lowdin
+  - kind: spin
+    atoms: "1:36"
+    value: 1.0
+    population: lowdin
