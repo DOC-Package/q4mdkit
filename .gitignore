@@ -88,3 +88,37 @@ ref/
 
 # superpowers
 docs/superpowers
+
+# VG30 ORCA MD working files and archived failed runs
+/examples/vg30/*-orca/orca.*
+/examples/vg30/*-orca/OpenMM_MD*.chk
+/examples/vg30/*-orca/output/
+/examples/vg30/*-orca/failed-mpi-*/
+
+# VG30 trajectory-analysis work directories and DFTB-generated inputs/backups
+/examples/vg30/analysis/*/work/
+/examples/vg30/tddftb/opt/dftb_pin.hsd
+/examples/vg30/tddftb/opt/geo_end.xyz.previous.*
+
+# Pentacene JOYCE compilation and run artifacts
+/examples/pentacene775a-mm/joyce/source/*.o
+/examples/pentacene775a-mm/joyce/source/joyce.x
+/examples/pentacene775a-mm/joyce/**/*.err
+/examples/pentacene775a-mm/joyce/*/provvi.48
+/examples/pentacene775a-mm/joyce/cation/pentacene_cation_assigned
+/examples/pentacene775a-mm/joyce/cation/pentacene_cation_freqchk.
+/examples/pentacene775a-mm/joyce/cation/pentacene_cation_orca_ass
+/examples/pentacene775a-mm/joyce/cation/pentacene_cation_orca_dep
+/examples/pentacene775a-mm/joyce/cation/pentacene_cation_orca_fre
+/examples/pentacene775a-mm/joyce/neutral/pentacene_neutral_minimal
+
+# ORCA outputs inside the JOYCE reference-calculation directories
+/examples/pentacene775a-mm/joyce/*/orca/*.tmp*
+/examples/pentacene775a-mm/joyce/*/orca/*.bas[0-9]
+/examples/pentacene775a-mm/joyce/*/orca/*.carthess
+/examples/pentacene775a-mm/joyce/*/orca/*.densities
+/examples/pentacene775a-mm/joyce/*/orca/*.densitiesinfo
+/examples/pentacene775a-mm/joyce/*/orca/*.gbw
+/examples/pentacene775a-mm/joyce/*/orca/*.ges
+/examples/pentacene775a-mm/joyce/*/orca/*.hostnames
+/examples/pentacene775a-mm/joyce/*/orca/*.opt
