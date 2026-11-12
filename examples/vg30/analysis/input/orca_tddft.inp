@@ -1,0 +1,24 @@
+# VG30+ snapshots: full singlet TDDFT, without geometry optimization.
+! B3LYP D3BJ def2-SVP def2/J RIJCOSX NormalSCF
+
+%pal
+  nprocs {NPROCS}
+end
+%maxcore {MEMORY}
+
+%scf
+  MaxIter 300
+  ConvForced true
+end
+
+%tddft
+  nroots {NROOTS}
+  maxdim 10
+  MaxIter 100
+  tda false
+  triplets false
+end
+
+* xyz 1 1
+{XYZ_FILE}
+*

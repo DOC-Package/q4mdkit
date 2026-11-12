@@ -1,0 +1,23 @@
+# Ten singlet excited states of optimized VG30+ in vacuum.
+! B3LYP D3BJ def2-SVP def2/J RIJCOSX TightSCF NoAutoStart
+
+%pal
+  nprocs @NPROCS@
+end
+
+%maxcore @MAXCORE@
+
+%scf
+  MaxIter 300
+  ConvForced true
+end
+
+%tddft
+  nroots 10
+  maxdim 10
+  MaxIter 100
+  tda false
+  triplets false
+end
+
+* xyzfile 1 1 ../opt/vg30_opt.xyz

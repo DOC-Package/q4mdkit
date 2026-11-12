@@ -11,7 +11,10 @@ Usage:
 """
 
 import numpy as np
-import mdtraj as md
+try:
+    import mdtraj as md
+except ModuleNotFoundError:  # optional dependency for trajectory execution
+    md = None
 from pathlib import Path
 import shutil
 import yaml
@@ -46,7 +49,9 @@ def load_pccharges(path: Path):
     """Load point charges from file. Returns charges (4th column)."""
     if not path.exists():
         raise FileNotFoundError(f"PCcharges file not found: {path}")
-    data = np.loadtxt(path)
+    data = np.loadtxt(path, ndmin=2)
+    if data.shape[1] != 4:
+        raise ValueError(f"Point charges require four columns (x y z charge): {path}")
     # columns: x, y, z, charge (in Angstrom)
     return data[:, 3]  # return only charges
 
@@ -69,6 +74,8 @@ def iter_qm_coordinates(
         raise FileNotFoundError(f"Trajectory not found: {traj_path}")
     if not top_path.exists():
         raise FileNotFoundError(f"Topology not found: {top_path}")
+    if md is None:
+        raise ModuleNotFoundError("mdtraj is required to read trajectory coordinates")
 
     frame_counter = 0
     for chunk in md.iterload(str(traj_path), top=str(top_path), chunk=chunk_size):
@@ -136,6 +143,8 @@ class TDORCAConfig:
     
     # Spectrum output
     output_individual_spectra: bool = False  # Save spectrum for each frame
+    output_average_spectrum: bool = True
+    excitations_format: str = "long"  # "horizontal" matches TD-DFTB output
 
 
 def load_tdorca_config(config_path: Path) -> TDORCAConfig:
@@ -163,7 +172,7 @@ def load_tdorca_config(config_path: Path) -> TDORCAConfig:
     orca_template = (base_dir / input_cfg['orca_template']).resolve()
     
     pccharges_template = None
-    if 'pccharges_template' in input_cfg:
+    if input_cfg.get('pccharges_template'):
         pccharges_template = (base_dir / input_cfg['pccharges_template']).resolve()
     
     # Parse output settings
@@ -173,6 +182,10 @@ def load_tdorca_config(config_path: Path) -> TDORCAConfig:
     excitations_file = output_cfg.get('excitations_file', 'excitations.dat')
     work_directory = output_cfg.get('work_directory', 'work')
     output_individual_spectra = output_cfg.get('individual_spectra', False)
+    output_average_spectrum = output_cfg.get('average_spectrum', True)
+    excitations_format = output_cfg.get('excitations_format', 'long')
+    if excitations_format not in ('long', 'horizontal'):
+        raise ValueError("output.excitations_format must be 'long' or 'horizontal'")
     
     # Parse frame selection
     frames_cfg = data.get('frames', {})
@@ -180,6 +193,8 @@ def load_tdorca_config(config_path: Path) -> TDORCAConfig:
     n_frames = frames_cfg.get('n_frames', None)
     t0_fs = frames_cfg.get('t0_fs', 0.0)
     dt_fs = frames_cfg.get('dt_fs', 4.0)
+    if start_frame < 0 or (n_frames is not None and n_frames < 0):
+        raise ValueError("frames.start and frames.n_frames must be nonnegative")
     
     # Parse ORCA settings
     orca_cfg = data.get('orca', {})
@@ -220,6 +235,8 @@ def load_tdorca_config(config_path: Path) -> TDORCAConfig:
         energy_range_ev=tuple(energy_range),
         n_energy_points=n_energy_points,
         output_individual_spectra=output_individual_spectra,
+        output_average_spectrum=output_average_spectrum,
+        excitations_format=excitations_format,
     )
 
 
@@ -270,32 +287,27 @@ def parse_orca_output(output_path: Path) -> List[Excitation]:
     if spectrum_start == -1:
         return excitations
     
-    # Get the spectrum section (until next section or end)
-    spectrum_section = content[spectrum_start:spectrum_start+10000]
-    
-    # Parse each excitation line
-    # Format: State   Energy(cm-1)    Wavelength(nm)  fosc  ...
-    pattern = r'^\s*(\d+)\s+([\d.]+)\s+([\d.]+)\s+([\d.Ee+-]+)'
-    
-    for line in spectrum_section.split('\n'):
-        match = re.match(pattern, line)
-        if match:
-            try:
-                state = int(match.group(1))
-                energy_cm = float(match.group(2))
-                wavelength_nm = float(match.group(3))
-                fosc = float(match.group(4))
-                
-                # Convert cm-1 to eV
-                energy_ev = energy_cm / 8065.544  # 1 eV = 8065.544 cm-1
-                
-                excitations.append(Excitation(
-                    energy_ev=energy_ev,
-                    oscillator_strength=fosc,
-                    wavelength_nm=wavelength_nm
-                ))
-            except (ValueError, IndexError):
-                continue
+    # ORCA 5: state, cm-1, nm, fosc. ORCA 6: transition, eV, cm-1, nm, fosc.
+    # Stop after this table so velocity/quadrupole spectra cannot add duplicates.
+    number = r'[-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:[EeDd][-+]?\d+)?'
+    old_row = re.compile(rf'^\s*\d+\s+({number})\s+({number})\s+({number})(?:\s|$)')
+    new_row = re.compile(rf'^\s*\S+\s+->\s+\S+\s+({number})\s+({number})\s+({number})\s+({number})(?:\s|$)')
+    for line in content[spectrum_start:].splitlines()[1:]:
+        modern = new_row.match(line)
+        legacy = old_row.match(line)
+        if modern:
+            values = [float(value.replace('D', 'E').replace('d', 'e')) for value in modern.groups()]
+            energy_ev, _, wavelength_nm, fosc = values
+        elif legacy:
+            energy_cm, wavelength_nm, fosc = [
+                float(value.replace('D', 'E').replace('d', 'e')) for value in legacy.groups()
+            ]
+            energy_ev = energy_cm / 8065.544
+        elif excitations:
+            break
+        else:
+            continue
+        excitations.append(Excitation(energy_ev, fosc, wavelength_nm))
     
     return excitations
 
@@ -443,8 +455,8 @@ def prepare_orca_input(
     elif '* xyzfile' in orca_input.lower() or '*xyzfile' in orca_input.lower():
         # Replace xyzfile reference
         orca_input = re.sub(
-            r'\*\s*xyzfile\s+\d+\s+\d+\s+\S+',
-            f'* xyzfile 0 1 {xyz_file}',
+            r'(\*\s*xyzfile\s+[-+]?\d+\s+\d+\s+)(?:"[^"]+"|\S+)',
+            lambda match: match.group(1) + str(xyz_file),
             orca_input,
             flags=re.IGNORECASE
         )
@@ -482,7 +494,9 @@ def run_orca_subprocess(
     if num_threads is not None:
         env['OMP_NUM_THREADS'] = str(num_threads)
     
-    cmd = [orca_binary, str(input_file.name)]
+    # ORCA's parallel driver requires the executable's full path.
+    executable = shutil.which(orca_binary) or orca_binary
+    cmd = [str(Path(executable).resolve()), str(input_file.name)]
     output_file = work_dir / input_file.with_suffix('.out').name
     
     try:
@@ -496,6 +510,8 @@ def run_orca_subprocess(
                 stderr=subprocess.STDOUT,
                 timeout=timeout
             )
+        if result.returncode != 0:
+            return False
         
         # Check for successful completion
         if output_file.exists():
@@ -514,6 +530,36 @@ def run_orca_subprocess(
         return False
 
 
+def initialize_excitation_output(output_path: Path, n_roots: int, output_format: str):
+    """Create an excitation table; horizontal rows match TD-DFTB analysis."""
+    with open(output_path, 'w') as handle:
+        handle.write("# ORCA TD-DFT Excitation Data\n")
+        if output_format == 'horizontal':
+            columns = ['# Frame', 'Time(fs)']
+            for state in range(1, n_roots + 1):
+                columns.extend([f'E{state}(eV)', f'f{state}'])
+            handle.write('  '.join(columns) + '\n')
+        else:
+            handle.write("# Frame  Time(fs)  State  Energy(eV)  Wavelength(nm)  OscStrength\n")
+
+
+def append_excitation_frame(output_path: Path, frame_data: Dict, n_roots: int,
+                            output_format: str):
+    """Flush each successful snapshot to disk immediately."""
+    states = frame_data['excitations']
+    with open(output_path, 'a') as handle:
+        if output_format == 'horizontal':
+            fields = [f"{frame_data['frame']:6d}", f"{frame_data['time_fs']:.2f}"]
+            for state in states[:n_roots]:
+                fields.extend([f'{state.energy_ev:.4f}', f'{state.oscillator_strength:.6f}'])
+            handle.write('  '.join(fields) + '\n')
+        else:
+            for index, state in enumerate(states, 1):
+                handle.write(f"{frame_data['frame']:6d}  {frame_data['time_fs']:.2f}  "
+                             f"{index:3d}  {state.energy_ev:.4f}  "
+                             f"{state.wavelength_nm:.2f}  {state.oscillator_strength:.6f}\n")
+
+
 def run_tdorca_analysis(config_path: str):
     """
     Run ORCA TD-DFT analysis along a trajectory.
@@ -522,7 +568,14 @@ def run_tdorca_analysis(config_path: str):
     ----------
     config_path : str
         Path to YAML configuration file.
+
+    Returns
+    -------
+    int
+        Number of snapshots with usable excitation data.
     """
+    if md is None:
+        raise ModuleNotFoundError("mdtraj is required to run ORCA trajectory analysis")
     print(f"Running ORCA TD-DFT analysis with config: {config_path}")
     
     config = load_tdorca_config(Path(config_path))
@@ -532,14 +585,16 @@ def run_tdorca_analysis(config_path: str):
     work_dir = config.output_dir / config.work_directory
     work_dir.mkdir(parents=True, exist_ok=True)
     
-    # Load trajectory
-    traj = md.load(str(config.traj_path), top=str(config.topology_path))
-    n_frames_total = traj.n_frames
+    # Read topology once and stream coordinates below, as in TD-DFTB analysis.
+    traj = md.load_frame(str(config.traj_path), 0, top=str(config.topology_path))
     
     # Load QM indices
     qm_indices = load_qm_indices(config.qm_atoms_file)
     n_qm = len(qm_indices)
+    if n_qm == 0 or len(np.unique(qm_indices)) != n_qm or np.any(qm_indices < 0) or np.any(qm_indices >= traj.n_atoms):
+        raise ValueError("QM atom indices must be unique and within the trajectory atom range")
     n_mm = traj.n_atoms - n_qm
+    mm_indices = np.array([i for i in range(traj.n_atoms) if i not in qm_indices], dtype=int)
     
     # Get atom types for QM region
     topology = traj.topology
@@ -549,6 +604,8 @@ def run_tdorca_analysis(config_path: str):
     pc_template = None
     if config.pccharges_template is not None:
         pc_template = load_pccharges(config.pccharges_template)
+        if len(pc_template) != n_mm:
+            raise ValueError(f"Point-charge count {len(pc_template)} does not match MM atom count {n_mm}")
     
     # Print configuration
     print("=" * 60)
@@ -558,8 +615,9 @@ def run_tdorca_analysis(config_path: str):
     print(f"Topology: {config.topology_path}")
     print(f"Output: {config.output_dir}")
     print(f"N roots: {config.n_roots}")
-    print(f"Broadening: {config.broadening_ev} eV")
-    print(f"Energy range: {config.energy_range_ev[0]} - {config.energy_range_ev[1]} eV")
+    if config.output_average_spectrum or config.output_individual_spectra:
+        print(f"Broadening: {config.broadening_ev} eV")
+        print(f"Energy range: {config.energy_range_ev[0]} - {config.energy_range_ev[1]} eV")
     print(f"QM atoms: {n_qm}")
     print(f"MM atoms: {n_mm}")
     print(f"QM atom types: {set(atom_types)}")
@@ -576,31 +634,24 @@ def run_tdorca_analysis(config_path: str):
         config.energy_range_ev[1],
         config.n_energy_points
     )
-    wavelengths = np.where(energies > 0, NM_PER_EV / energies, np.inf)
+    wavelengths = np.divide(NM_PER_EV, energies, out=np.full_like(energies, np.inf), where=energies > 0)
+    initialize_excitation_output(config.excitations_file, config.n_roots, config.excitations_format)
     
     # Determine frames to process
-    end_frame = config.start_frame + (config.n_frames if config.n_frames else n_frames_total)
-    end_frame = min(end_frame, n_frames_total)
+    end_frame = None if config.n_frames is None else config.start_frame + config.n_frames
     
     frame_count = 0
-    for frame_idx in range(config.start_frame, end_frame):
-        global_idx = frame_idx
-        time_current = config.t0_fs + frame_idx * config.dt_fs
+    for global_idx, _, qm_coords_ang, mm_coords_ang in iter_qm_coordinates(
+        config.traj_path, config.topology_path, qm_indices, mm_indices,
+    ):
+        if global_idx < config.start_frame:
+            continue
+        if end_frame is not None and global_idx >= end_frame:
+            break
+        time_current = config.t0_fs + global_idx * config.dt_fs
         
         print(f"\rFrame {global_idx} (t = {time_current:.1f} fs)...", end="", flush=True)
         frame_count += 1
-        
-        # Get coordinates
-        frame = traj[frame_idx]
-        all_coords_nm = frame.xyz[0]  # Shape: (n_atoms, 3)
-        all_coords_ang = all_coords_nm * 10.0  # nm to Angstrom
-        
-        # QM coordinates
-        qm_coords_ang = all_coords_ang[qm_indices]
-        
-        # MM coordinates (everything except QM)
-        mm_indices = [i for i in range(traj.n_atoms) if i not in qm_indices]
-        mm_coords_ang = all_coords_ang[mm_indices]
         
         # Write QM geometry
         xyz_file = work_dir / "qm_coords.xyz"
@@ -609,15 +660,12 @@ def run_tdorca_analysis(config_path: str):
         # Write point charges if available
         pc_file = None
         if pc_template is not None:
-            pc_data = pc_template.copy()
-            pc_data[:, :3] = mm_coords_ang
             pc_file = work_dir / "pointcharges.pc"
             # ORCA point charge format: charge x y z
             with open(pc_file, 'w') as f:
-                f.write(f"{len(pc_data)}\n")
-                for row in pc_data:
-                    # ORCA format: q x y z
-                    f.write(f"{row[3]:12.6f} {row[0]:12.6f} {row[1]:12.6f} {row[2]:12.6f}\n")
+                f.write(f"{len(pc_template)}\n")
+                for charge, xyz in zip(pc_template, mm_coords_ang):
+                    f.write(f"{charge:12.6f} {xyz[0]:12.6f} {xyz[1]:12.6f} {xyz[2]:12.6f}\n")
         
         # Prepare ORCA input
         input_file = work_dir / "orca.inp"
@@ -651,6 +699,9 @@ def run_tdorca_analysis(config_path: str):
         if not excitations:
             print(f" [NO EXCITATIONS]")
             continue
+        if config.excitations_format == 'horizontal' and len(excitations) < config.n_roots:
+            print(f" [INCOMPLETE EXCITATIONS: {len(excitations)}/{config.n_roots}]")
+            continue
         
         # Store excitations
         frame_exc_data = {
@@ -659,15 +710,16 @@ def run_tdorca_analysis(config_path: str):
             'excitations': excitations
         }
         all_excitations.append(frame_exc_data)
+        append_excitation_frame(config.excitations_file, frame_exc_data,
+                                config.n_roots, config.excitations_format)
         
         # Compute spectrum for this frame
-        _, spectrum = compute_absorption_spectrum(
-            excitations,
-            config.energy_range_ev,
-            config.n_energy_points,
-            config.broadening_ev
-        )
-        all_spectra.append(spectrum)
+        if config.output_average_spectrum or config.output_individual_spectra:
+            _, spectrum = compute_absorption_spectrum(
+                excitations, config.energy_range_ev, config.n_energy_points,
+                config.broadening_ev,
+            )
+            all_spectra.append(spectrum)
         
         # Save individual spectrum if requested
         if config.output_individual_spectra:
@@ -681,37 +733,24 @@ def run_tdorca_analysis(config_path: str):
         
         print(f" [{len(excitations)} exc]")
     
-    print(f"\nProcessed {frame_count} frames, {len(all_spectra)} successful")
+    print(f"\nProcessed {frame_count} frames, {len(all_excitations)} successful")
     
-    if not all_spectra:
-        print("No spectra computed!")
-        return
+    if not all_excitations:
+        print("No excitations computed!")
+        return 0
     
     # Compute average spectrum
-    spectra_array = np.array(all_spectra)
-    avg_spectrum = np.mean(spectra_array, axis=0)
-    std_spectrum = np.std(spectra_array, axis=0)
-    
-    # Save average spectrum
-    with open(config.spectra_file, 'w') as f:
-        f.write(f"# ORCA TD-DFT Average Absorption Spectrum\n")
-        f.write(f"# N_frames: {len(all_spectra)}\n")
-        f.write(f"# Broadening: {config.broadening_ev} eV\n")
-        f.write(f"# Energy(eV)  Wavelength(nm)  Intensity  StdDev\n")
-        for i in range(len(energies)):
-            f.write(f"{energies[i]:.6f}  {wavelengths[i]:.2f}  {avg_spectrum[i]:.8f}  {std_spectrum[i]:.8f}\n")
-    
-    print(f"Saved average spectrum: {config.spectra_file}")
-    
-    # Save excitation data
-    with open(config.excitations_file, 'w') as f:
-        f.write("# ORCA TD-DFT Excitation Data\n")
-        f.write("# Frame  Time(fs)  State  Energy(eV)  Wavelength(nm)  OscStrength\n")
-        for frame_data in all_excitations:
-            for i, exc in enumerate(frame_data['excitations']):
-                f.write(f"{frame_data['frame']:6d}  {frame_data['time_fs']:.2f}  ")
-                f.write(f"{i+1:3d}  {exc.energy_ev:.4f}  {exc.wavelength_nm:.2f}  {exc.oscillator_strength:.6f}\n")
-    
+    if config.output_average_spectrum:
+        avg_spectrum = np.mean(all_spectra, axis=0)
+        std_spectrum = np.std(all_spectra, axis=0)
+        with open(config.spectra_file, 'w') as f:
+            f.write("# ORCA TD-DFT Average Absorption Spectrum\n")
+            f.write(f"# N_frames: {len(all_spectra)}\n")
+            f.write(f"# Broadening: {config.broadening_ev} eV\n")
+            f.write("# Energy(eV)  Wavelength(nm)  Intensity  StdDev\n")
+            for i in range(len(energies)):
+                f.write(f"{energies[i]:.6f}  {wavelengths[i]:.2f}  {avg_spectrum[i]:.8f}  {std_spectrum[i]:.8f}\n")
+        print(f"Saved average spectrum: {config.spectra_file}")
     print(f"Saved excitations: {config.excitations_file}")
     
     # Print summary statistics
@@ -720,10 +759,9 @@ def run_tdorca_analysis(config_path: str):
     print("=" * 60)
     
     # Find peak
-    peak_idx = np.argmax(avg_spectrum)
-    peak_energy = energies[peak_idx]
-    peak_wavelength = wavelengths[peak_idx]
-    print(f"Peak absorption: {peak_energy:.3f} eV ({peak_wavelength:.1f} nm)")
+    if config.output_average_spectrum:
+        peak_idx = np.argmax(avg_spectrum)
+        print(f"Peak absorption: {energies[peak_idx]:.3f} eV ({wavelengths[peak_idx]:.1f} nm)")
     
     # S1 statistics
     s1_energies = [fd['excitations'][0].energy_ev for fd in all_excitations if fd['excitations']]
@@ -734,6 +772,7 @@ def run_tdorca_analysis(config_path: str):
         print(f"S1 energy: {s1_mean:.3f} ± {s1_std:.3f} eV ({s1_wavelength:.1f} nm)")
     
     print("\nDone!")
+    return len(all_excitations)
 
 
 def main():

@@ -1,0 +1,32 @@
+# ORCA equivalent of tddftb_settings.yaml. Paths are relative to this file.
+input:
+  trajectory: "../nve/output/nve.dcd"
+  topology: "../input/vg30_acetonitrile.pdb"
+  qm_atoms: "../input/qmatoms"
+  orca_template: "input/orca_tddft.inp"
+  # Enable solvent point charges as in the optional TDDFTB configuration:
+  # pccharges_template: "input/PCcharges.dat"
+
+output:
+  directory: "tdorca"
+  excitations_file: "excitations.dat"
+  work_directory: "work"
+  excitations_format: horizontal
+  average_spectrum: false
+  individual_spectra: false
+
+frames:
+  start: 0
+  n_frames: null
+  t0_fs: 0.0
+  dt_fs: 4.0  # Same as TDDFTB; set to the actual saved-frame interval.
+
+orca:
+  binary: "/home/takahashi/local/orca/bin/orca"
+  num_procs: 8
+  num_threads: 1
+  memory_mb: 3000  # MB per MPI process
+  timeout: 3600   # seconds per snapshot
+
+tddft:
+  n_roots: 3

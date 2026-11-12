@@ -1,0 +1,14 @@
+md:
+  timestep: 0.0005          # ps (0.5 fs)
+  traj_frequency: 50        # steps (25 fs)
+  integrator:
+    nve: VerletIntegrator
+  simulation_time: 1.0      # ps
+  special_wrapping: true
+  special_wrapping_updatepos: true
+  wrapping_atoms_file: "../input/qmatoms"
+  wrap_final_state: false
+  wrap_final_pdb: false
+
+output:
+  directory: "output"

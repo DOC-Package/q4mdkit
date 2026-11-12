@@ -1,0 +1,35 @@
+# VG30 cation in acetonitrile: ORCA solute, AMBER solvent.
+paths:
+  amber_prmtop: "../input/vg30_acetonitrile.prmtop"
+  pdbfile: "../npt-mm/output/npt_lastframe.pdb"
+  qatoms: "../input/qmatoms"
+
+parallel:
+  numcores_qm: 8
+  numcores_mm: 4
+
+qm_backend: orca
+qm:
+  charge: 1
+  mult: 1
+
+orca:
+  orcadir: null  # Set to the directory containing the ORCA executable if needed.
+  orcasimpleinput: "! B3LYP D3BJ def2-SVP def2/J RIJCOSX NormalSCF"
+  orcablocks: |
+    %maxcore 3000
+    %scf
+      MaxIter 300
+    end
+  numcores: 8
+  log_enabled: true
+  keep_output: false
+  energy_logfile: "orca_energy.dat"
+
+openmm:
+  periodic: true
+  periodic_nonbonded_cutoff: 9.0
+  use_boxfile: false  # The runner reads full precision vectors from State XML.
+  autoconstraints: HBonds
+  hydrogenmass: 1.0
+  platform: "CPU"
