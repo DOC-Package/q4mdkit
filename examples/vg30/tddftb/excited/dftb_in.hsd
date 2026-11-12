@@ -1,0 +1,97 @@
+# Vacuum TD-DFTB/Casida calculation for the optimized VG30 cation.
+Geometry = xyzFormat {
+  <<< "../opt/geo_end.xyz"
+}
+
+Hamiltonian = DFTB {
+  Charge = 1
+  Scc = Yes
+  SccTolerance = 1e-5
+  MaxSccIterations = 300
+  ThirdOrderFull = No
+  ThirdOrder = No
+
+  SlaterKosterFiles {
+    C-C = "/home/takahashi/qmmm/sk/3ob/C-C.skf"
+    C-H = "/home/takahashi/qmmm/sk/3ob/C-H.skf"
+    C-N = "/home/takahashi/qmmm/sk/3ob/C-N.skf"
+    C-O = "/home/takahashi/qmmm/sk/3ob/C-O.skf"
+    C-Cl = "/home/takahashi/qmmm/sk/3ob/C-Cl.skf"
+    H-C = "/home/takahashi/qmmm/sk/3ob/H-C.skf"
+    H-H = "/home/takahashi/qmmm/sk/3ob/H-H.skf"
+    H-N = "/home/takahashi/qmmm/sk/3ob/H-N.skf"
+    H-O = "/home/takahashi/qmmm/sk/3ob/H-O.skf"
+    H-Cl = "/home/takahashi/qmmm/sk/3ob/H-Cl.skf"
+    N-C = "/home/takahashi/qmmm/sk/3ob/N-C.skf"
+    N-H = "/home/takahashi/qmmm/sk/3ob/N-H.skf"
+    N-N = "/home/takahashi/qmmm/sk/3ob/N-N.skf"
+    N-O = "/home/takahashi/qmmm/sk/3ob/N-O.skf"
+    N-Cl = "/home/takahashi/qmmm/sk/3ob/N-Cl.skf"
+    O-C = "/home/takahashi/qmmm/sk/3ob/O-C.skf"
+    O-H = "/home/takahashi/qmmm/sk/3ob/O-H.skf"
+    O-N = "/home/takahashi/qmmm/sk/3ob/O-N.skf"
+    O-O = "/home/takahashi/qmmm/sk/3ob/O-O.skf"
+    O-Cl = "/home/takahashi/qmmm/sk/3ob/O-Cl.skf"
+    Cl-C = "/home/takahashi/qmmm/sk/3ob/Cl-C.skf"
+    Cl-H = "/home/takahashi/qmmm/sk/3ob/Cl-H.skf"
+    Cl-N = "/home/takahashi/qmmm/sk/3ob/Cl-N.skf"
+    Cl-O = "/home/takahashi/qmmm/sk/3ob/Cl-O.skf"
+    Cl-Cl = "/home/takahashi/qmmm/sk/3ob/Cl-Cl.skf"
+  }
+
+  MaxAngularMomentum {
+    C = "p"
+    H = "s"
+    N = "p"
+    O = "p"
+    Cl = "d"
+  }
+
+  Dispersion = DFTD3 {
+    Damping = BeckeJohnson {
+      a1 = 0.7123
+      a2 = 2.6468
+    }
+    s6 = 1.0
+    s8 = 0.6337
+  }
+
+  # Keep the response kernel free of unsupported global exchange.
+  Hybrid = None {}
+
+}
+
+ExcitedState = {
+  Casida = {
+    NrOfExcitations = 10
+    Symmetry = Singlet
+    WriteTransitions = Yes
+    WriteTransitionDipole = Yes
+    Diagonaliser = Stratmann {}
+  }
+}
+
+Analysis {
+  PrintForces = No
+  WriteEigenvectors = Yes
+  EigenvectorsAsText = Yes
+  WriteBandOut = Yes
+  MullikenAnalysis = Yes
+  WriteNetCharges = Yes
+}
+
+ParserOptions {
+  # Keep compatibility with the legacy OPV-B3LYP SK-file metadata.
+  ParserVersion = 10
+}
+
+Options {
+  WriteDetailedOut = Yes
+  WriteDetailedXml = No
+  WriteAutotestTag = No
+  WriteResultsTag = No
+  RandomSeed = 0
+  TimingVerbosity = 1
+  WriteCharges = Yes
+  WriteHS = No
+}

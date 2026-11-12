@@ -1,0 +1,100 @@
+# Vacuum DFTB geometry optimization for the VG30 cation.
+Geometry = xyzFormat {
+  <<< "../input/vg30.xyz"
+}
+
+Hamiltonian = DFTB {
+  Charge = 1
+  Scc = Yes
+  SccTolerance = 1e-8
+  MaxSccIterations = 300
+  ThirdOrderFull = No
+  ThirdOrder = No
+
+  SlaterKosterFiles {
+    C-C = "/home/takahashi/qmmm/sk/opv/b3lyp/C-C.skf"
+    C-H = "/home/takahashi/qmmm/sk/opv/b3lyp/C-H.skf"
+    C-N = "/home/takahashi/qmmm/sk/opv/b3lyp/C-N.skf"
+    C-O = "/home/takahashi/qmmm/sk/opv/b3lyp/C-O.skf"
+    C-Cl = "/home/takahashi/qmmm/sk/opv/b3lyp/C-Cl.skf"
+    H-C = "/home/takahashi/qmmm/sk/opv/b3lyp/H-C.skf"
+    H-H = "/home/takahashi/qmmm/sk/opv/b3lyp/H-H.skf"
+    H-N = "/home/takahashi/qmmm/sk/opv/b3lyp/H-N.skf"
+    H-O = "/home/takahashi/qmmm/sk/opv/b3lyp/H-O.skf"
+    H-Cl = "/home/takahashi/qmmm/sk/opv/b3lyp/H-Cl.skf"
+    N-C = "/home/takahashi/qmmm/sk/opv/b3lyp/N-C.skf"
+    N-H = "/home/takahashi/qmmm/sk/opv/b3lyp/N-H.skf"
+    N-N = "/home/takahashi/qmmm/sk/opv/b3lyp/N-N.skf"
+    N-O = "/home/takahashi/qmmm/sk/opv/b3lyp/N-O.skf"
+    N-Cl = "/home/takahashi/qmmm/sk/opv/b3lyp/N-Cl.skf"
+    O-C = "/home/takahashi/qmmm/sk/opv/b3lyp/O-C.skf"
+    O-H = "/home/takahashi/qmmm/sk/opv/b3lyp/O-H.skf"
+    O-N = "/home/takahashi/qmmm/sk/opv/b3lyp/O-N.skf"
+    O-O = "/home/takahashi/qmmm/sk/opv/b3lyp/O-O.skf"
+    O-Cl = "/home/takahashi/qmmm/sk/opv/b3lyp/O-Cl.skf"
+    Cl-C = "/home/takahashi/qmmm/sk/opv/b3lyp/Cl-C.skf"
+    Cl-H = "/home/takahashi/qmmm/sk/opv/b3lyp/Cl-H.skf"
+    Cl-N = "/home/takahashi/qmmm/sk/opv/b3lyp/Cl-N.skf"
+    Cl-O = "/home/takahashi/qmmm/sk/opv/b3lyp/Cl-O.skf"
+    Cl-Cl = "/home/takahashi/qmmm/sk/opv/b3lyp/Cl-Cl.skf"
+  }
+
+  MaxAngularMomentum {
+    C = "p"
+    H = "s"
+    N = "p"
+    O = "p"
+    Cl = "d"
+  }
+
+  Dispersion = DFTD3 {
+    Damping = BeckeJohnson {
+      a1 = 0.7123
+      a2 = 2.6468
+    }
+    s6 = 1.0
+    s8 = 0.6337
+  }
+
+  Hybrid = CAM {
+    Screening = MatrixBased {}
+  }
+}
+
+Driver = GeometryOptimization {
+  Optimizer = Rational {}
+  MovedAtoms = 1:77
+  MaxSteps = 500
+  OutputPrefix = "geo_end"
+  Convergence {
+    Energy = 1e-6
+    GradElem = 5e-4
+    GradNorm = 5e-4
+    DispElem = 5e-4
+    DispNorm = 5e-4
+  }
+  AppendGeometries = No
+}
+
+Analysis {
+  PrintForces = Yes
+  MullikenAnalysis = Yes
+  WriteNetCharges = Yes
+}
+
+ParserOptions {
+  # The OPV-B3LYP SK files use the legacy range-separated metadata.
+  # Parser 10 lets DFTB+ 24.1 convert that metadata safely.
+  ParserVersion = 10
+}
+
+Options {
+  WriteDetailedOut = Yes
+  WriteDetailedXml = No
+  WriteAutotestTag = No
+  WriteResultsTag = No
+  RandomSeed = 0
+  TimingVerbosity = 1
+  WriteCharges = Yes
+  WriteHS = No
+}

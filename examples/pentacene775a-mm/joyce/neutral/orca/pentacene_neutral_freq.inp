@@ -1,0 +1,4 @@
+! B3LYP D3BJ def2-SVP def2/J RIJCOSX Freq TightSCF
+%pal nprocs 1 end
+%maxcore 2000
+* xyzfile 0 1 pentacene_neutral.xyz

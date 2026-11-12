@@ -1,0 +1,12 @@
+$title
+Neutral pentacene JOYCE Step1 minimal topology
+
+$print 0
+
+$equil pentacene_neutral.fcc
+
+$forcefield gromacs pentacene_neutral_minimal.top
+
+$whess 5000.0 2500.0
+
+$gracefreq pentacene_neutral_minimal_freqchk.agr

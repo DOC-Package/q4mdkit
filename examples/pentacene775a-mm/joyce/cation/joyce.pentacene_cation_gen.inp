@@ -1,0 +1,12 @@
+$title
+Pentacene cation JOYCE generate natural ICs
+
+$print 1
+
+$equil pentacene_cation.fcc
+
+$forcefield gromacs pentacene_cation_joyce_start.top
+
+$generate
+
+$whess 5000.0 2500.0

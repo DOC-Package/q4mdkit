@@ -1,0 +1,29 @@
+ Linker    = gfortran
+ Fcompiler = gfortran
+ Opto      = -O3  -mcmodel=large
+#
+X         = ./
+pgm = $(X)joyce.x
+obj = $(X)comparenm.o     $(X)compfun.o     $(X)compsyst.o    \
+      $(X)eigen.o         $(X)ffhessian.o   $(X)getbond.o     \
+      $(X)gro2joyce.o     $(X)ic_handling.o $(X)invert.o      \
+      $(X)joyce2amber.o   $(X)joyce2gro.o   $(X)joyce2mosc.o  \
+      $(X)joyce.o         $(X)linsyst.o     $(X)matprint.o    \
+      $(X)matrix_manage.o $(X)mosc2joyce.o  $(X)movegeo.o     \
+      $(X)read_fchk.o     $(X)solvesyst.o   $(X)string.o      \
+      $(X)unitedatom.o    $(X)vibrat.o      $(X)joyce2gauss.o \
+      $(X)read_fcc.o      $(X)version.o     $(X)correctQMlj.o
+#
+$(pgm)    : $(obj)
+	$(Linker) $(Opto)  -o $(pgm) $(obj)
+
+.f.o:
+	$(Fcompiler) $(Opto) -c $*.f -o $*.o
+
+.PHONY:version.f
+version.f:
+	@bash ./get_git_version.sh $(FCFLAGS) $(LIBS) || echo "Reusing version file"
+
+clean:
+	rm *o $(pgm)
+

@@ -1,0 +1,247 @@
+$title
+Pentacene cation JOYCE ORCA Hessian with all intramolecular parameters assigned
+
+$print 0
+
+$equil pentacene_cation_orca.fcc
+
+$forcefield gromacs pentacene_cation_joyce_start.top
+
+$whess 5000.0 2500.0
+
+$assign
+  1 =   5556.3233724     ca=ca
+  2 =   5556.3233724     ca=ca
+  3 =   5556.3233724     ca=ca
+  4 =   5556.3233724     ca=ca
+  5 =   5655.0263120     ca-ha
+  6 =   5556.3233724     ca=ca
+  7 =   5556.3233724     ca=ca
+  8 =   5556.3233724     ca=ca
+  9 =   5655.0263120     ca-ha
+ 10 =   5556.3233724     ca=ca
+ 11 =   5556.3233724     ca=ca
+ 12 =   5556.3233724     ca=ca
+ 13 =   5655.0263120     ca-ha
+ 14 =   5655.0263120     ca=ha
+ 15 =   5556.3233724     ca=ca
+ 16 =   5556.3233724     ca=ca
+ 17 =   5556.3233724     ca=ca
+ 18 =   5556.3233724     ca=ca
+ 19 =   5655.0263120     ca-ha
+ 20 =   5556.3233724     ca=ca
+ 21 =   5556.3233724     ca=ca
+ 22 =   5556.3233724     ca=ca
+ 23 =   5655.0263120     ca-ha
+ 24 =   5556.3233724     ca=ca
+ 25 =   5655.0263120     ca=ca
+ 26 =   5556.3233724     ca-ha
+ 27 =   5655.0263120     ca-ha
+ 28 =   5655.0263120     ca=ha
+ 29 =   5556.3233724     ca=ca
+ 30 =   5556.3233724     ca=ca
+ 31 =   5556.3233724     ca=ca
+ 32 =   5655.0263120     ca-ha
+ 33 =   5556.3233724     ca=ca
+ 34 =   5556.3233724     ca=ca
+ 35 =   5655.0263120     ca-ha
+ 36 =   5556.3233724     ca=ca
+ 37 =   5655.0263120     ca=ca
+ 38 =   5556.3233724     ca-ha
+ 39 =   5655.0263120     ca-ha
+ 40 =   5655.0263120     ca-ha
+ 41 =   1068.2545383     ca=ca-ca
+ 42 =   1094.7512813     ca=ca-ca
+ 43 =   1068.2545383     ca=ca-ca
+ 44 =   1068.2545383     ca=ca-ha
+ 45 =   1068.2545383     ca=ca-ca
+ 46 =   1094.7512813     ca=ca-ca
+ 47 =   1068.2545383     ca=ca-ca
+ 48 =   1068.2545383     ca=ca-ca
+ 49 =   1068.2545383     ca=ca-ha
+ 50 =   1068.2545383     ca=ca-ha
+ 51 =   1068.2545383     ca=ca-ca
+ 52 =   1068.2545383     ca=ca-ca
+ 53 =   1094.7512813     ca=ca-ca
+ 54 =   1094.7512813     ca=ca-ca
+ 55 =   1068.2545383     ca=ca-ha
+ 56 =   1068.2545383     ca=ca-ha
+ 57 =   1068.2545383     ca=ca-ca
+ 58 =   1094.7512813     ca=ca-ha
+ 59 =   1068.2545383     ca=ca-ca
+ 60 =   1094.7512813     ca=ca-ca
+ 61 =   1068.2545383     ca=ca-ca
+ 62 =   1068.2545383     ca=ca-ca
+ 63 =   1068.2545383     ca=ca-ha
+ 64 =   1068.2545383     ca=ca-ca
+ 65 =   1068.2545383     ca=ca-ca
+ 66 =   1068.2545383     ca=ca-ha
+ 67 =   1094.7512813     ca=ca-ca
+ 68 =   1068.2545383     ca=ca-ha
+ 69 =   1068.2545383     ca=ca-ca
+ 70 =   1094.7512813     ca=ca-ca
+ 71 =   1068.2545383     ca=ca-ca
+ 72 =   1068.2545383     ca=ca-ca
+ 73 =   1094.7512813     ca=ca-ca
+ 74 =   1094.7512813     ca=ca-ha
+ 75 =   1068.2545383     ca=ca-ha
+ 76 =   1094.7512813     ca=ca-ca
+ 77 =   1094.7512813     ca=ca-ha
+ 78 =   1068.2545383     ca=ca-ca
+ 79 =   1094.7512813     ca=ca-ha
+ 80 =   1068.2545383     ca=ca-ha
+ 81 =   1068.2545383     ca=ca-ca
+ 82 =   1068.2545383     ca=ca-ha
+ 83 =   1094.7512813     ca=ca-ca
+ 84 =   1068.2545383     ca=ca-ca
+ 85 =   1094.7512813     ca=ca-ca
+ 86 =   1094.7512813     ca=ca-ha
+ 87 =   1068.2545383     ca=ca-ha
+ 88 =   1068.2545383     ca=ca-ha
+ 89 =   1094.7512813     ca=ca-ha
+ 90 =   1068.2545383     ca=ca-ha
+ 91 =   1068.2545383     ca=ca-ca
+ 92 =   1094.7512813     ca=ca-ca
+ 93 =   1094.7512813     ca=ca-ca
+ 94 =   1094.7512813     ca=ca-ca
+ 95 =   1094.7512813     ca=ca-ca
+ 96 =   1068.2545383     ca=ca-ha
+ 97 =   1068.2545383     ca=ca-ca
+ 98 =   1094.7512813     ca=ca-ha
+ 99 =   1068.2545383     ca=ca-ha
+100 =   1094.7512813     ca=ca-ca
+101 =   1068.2545383     ca=ca-ha
+102 =   1094.7512813     ca=ca-ca
+103 =   1094.7512813     ca=ca-ha
+104 =   1094.7512813     ca=ca-ha
+105 =   1094.7512813     ca=ca-ha
+106 =   1094.7512813     ca=ca-ha
+107 = 15.16700000     ; assigned dihedral 107
+108 = 15.16700000     ; assigned dihedral 108
+109 = 15.16700000     ; assigned dihedral 109
+110 = 15.16700000     ; assigned dihedral 110
+111 = 15.16700000     ; assigned dihedral 111
+112 = 15.16700000     ; assigned dihedral 112
+113 = 15.16700000     ; assigned dihedral 113
+114 = 15.16700000     ; assigned dihedral 114
+115 = 15.16700000     ; assigned dihedral 115
+116 = 15.16700000     ; assigned dihedral 116
+117 = 15.16700000     ; assigned dihedral 117
+118 = 15.16700000     ; assigned dihedral 118
+119 = 15.16700000     ; assigned dihedral 119
+120 = 15.16700000     ; assigned dihedral 120
+121 = 15.16700000     ; assigned dihedral 121
+122 = 15.16700000     ; assigned dihedral 122
+123 = 15.16700000     ; assigned dihedral 123
+124 = 15.16700000     ; assigned dihedral 124
+125 = 15.16700000     ; assigned dihedral 125
+126 = 15.16700000     ; assigned dihedral 126
+127 = 15.16700000     ; assigned dihedral 127
+128 = 15.16700000     ; assigned dihedral 128
+129 = 15.16700000     ; assigned dihedral 129
+130 = 15.16700000     ; assigned dihedral 130
+131 = 15.16700000     ; assigned dihedral 131
+132 = 15.16700000     ; assigned dihedral 132
+133 = 15.16700000     ; assigned dihedral 133
+134 = 15.16700000     ; assigned dihedral 134
+135 = 15.16700000     ; assigned dihedral 135
+136 = 15.16700000     ; assigned dihedral 136
+137 = 15.16700000     ; assigned dihedral 137
+138 = 15.16700000     ; assigned dihedral 138
+139 = 15.16700000     ; assigned dihedral 139
+140 = 15.16700000     ; assigned dihedral 140
+141 = 15.16700000     ; assigned dihedral 141
+142 = 15.16700000     ; assigned dihedral 142
+143 = 15.16700000     ; assigned dihedral 143
+144 = 15.16700000     ; assigned dihedral 144
+145 = 15.16700000     ; assigned dihedral 145
+146 = 15.16700000     ; assigned dihedral 146
+147 = 15.16700000     ; assigned dihedral 147
+148 = 15.16700000     ; assigned dihedral 148
+149 = 15.16700000     ; assigned dihedral 149
+150 = 15.16700000     ; assigned dihedral 150
+151 = 15.16700000     ; assigned dihedral 151
+152 = 15.16700000     ; assigned dihedral 152
+153 = 15.16700000     ; assigned dihedral 153
+154 = 15.16700000     ; assigned dihedral 154
+155 = 15.16700000     ; assigned dihedral 155
+156 = 15.16700000     ; assigned dihedral 156
+157 = 15.16700000     ; assigned dihedral 157
+158 = 15.16700000     ; assigned dihedral 158
+159 = 15.16700000     ; assigned dihedral 159
+160 = 15.16700000     ; assigned dihedral 160
+161 = 15.16700000     ; assigned dihedral 161
+162 = 15.16700000     ; assigned dihedral 162
+163 = 15.16700000     ; assigned dihedral 163
+164 = 15.16700000     ; assigned dihedral 164
+165 = 15.16700000     ; assigned dihedral 165
+166 = 15.16700000     ; assigned dihedral 166
+167 = 15.16700000     ; assigned dihedral 167
+168 = 15.16700000     ; assigned dihedral 168
+169 = 15.16700000     ; assigned dihedral 169
+170 = 15.16700000     ; assigned dihedral 170
+171 = 15.16700000     ; assigned dihedral 171
+172 = 15.16700000     ; assigned dihedral 172
+173 = 15.16700000     ; assigned dihedral 173
+174 = 15.16700000     ; assigned dihedral 174
+175 = 15.16700000     ; assigned dihedral 175
+176 = 15.16700000     ; assigned dihedral 176
+177 = 15.16700000     ; assigned dihedral 177
+178 = 15.16700000     ; assigned dihedral 178
+179 = 15.16700000     ; assigned dihedral 179
+180 = 15.16700000     ; assigned dihedral 180
+181 = 15.16700000     ; assigned dihedral 181
+182 = 15.16700000     ; assigned dihedral 182
+183 = 15.16700000     ; assigned dihedral 183
+184 = 15.16700000     ; assigned dihedral 184
+185 = 15.16700000     ; assigned dihedral 185
+186 = 15.16700000     ; assigned dihedral 186
+187 = 15.16700000     ; assigned dihedral 187
+188 = 15.16700000     ; assigned dihedral 188
+189 = 15.16700000     ; assigned dihedral 189
+190 = 15.16700000     ; assigned dihedral 190
+191 = 15.16700000     ; assigned dihedral 191
+192 = 15.16700000     ; assigned dihedral 192
+193 = 15.16700000     ; assigned dihedral 193
+194 = 15.16700000     ; assigned dihedral 194
+195 = 15.16700000     ; assigned dihedral 195
+196 = 15.16700000     ; assigned dihedral 196
+197 = 15.16700000     ; assigned dihedral 197
+198 = 15.16700000     ; assigned dihedral 198
+199 = 15.16700000     ; assigned dihedral 199
+200 = 15.16700000     ; assigned dihedral 200
+201 = 15.16700000     ; assigned dihedral 201
+202 = 15.16700000     ; assigned dihedral 202
+203 = 15.16700000     ; assigned dihedral 203
+204 = 15.16700000     ; assigned dihedral 204
+205 = 15.16700000     ; assigned dihedral 205
+206 = 15.16700000     ; assigned dihedral 206
+207 = 15.16700000     ; assigned dihedral 207
+208 = 15.16700000     ; assigned dihedral 208
+209 = 15.16700000     ; assigned dihedral 209
+210 = 15.16700000     ; assigned dihedral 210
+211 = 4.60240000     ; assigned dihedral 211
+212 = 4.60240000     ; assigned dihedral 212
+213 = 4.60240000     ; assigned dihedral 213
+214 = 4.60240000     ; assigned dihedral 214
+215 = 4.60240000     ; assigned dihedral 215
+216 = 4.60240000     ; assigned dihedral 216
+217 = 4.60240000     ; assigned dihedral 217
+218 = 4.60240000     ; assigned dihedral 218
+219 = 4.60240000     ; assigned dihedral 219
+220 = 4.60240000     ; assigned dihedral 220
+221 = 4.60240000     ; assigned dihedral 221
+222 = 4.60240000     ; assigned dihedral 222
+223 = 4.60240000     ; assigned dihedral 223
+224 = 4.60240000     ; assigned dihedral 224
+225 = 4.60240000     ; assigned dihedral 225
+226 = 4.60240000     ; assigned dihedral 226
+227 = 4.60240000     ; assigned dihedral 227
+228 = 4.60240000     ; assigned dihedral 228
+229 = 4.60240000     ; assigned dihedral 229
+230 = 4.60240000     ; assigned dihedral 230
+231 = 4.60240000     ; assigned dihedral 231
+232 = 4.60240000     ; assigned dihedral 232
+$end
+
+$gracefreq pentacene_cation_orca_assignall_freqchk.agr

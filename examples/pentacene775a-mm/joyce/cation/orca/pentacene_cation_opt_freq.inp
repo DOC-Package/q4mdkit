@@ -1,0 +1,4 @@
+! B3LYP D3BJ def2-SV(P) def2/J RIJCOSX Freq TightSCF
+%pal nprocs 1 end
+%maxcore 2000
+* xyzfile 1 2 pentacene_cation.xyz

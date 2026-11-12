@@ -1,0 +1,83 @@
+Geometry = { xyzFormat {
+  <<< 'dftb_.xyz' 
+}
+}
+Hamiltonian = DFTB{
+Charge = 1
+ElectricField = { 
+  PointCharges = { 
+    GaussianBlurWidth [Angstrom] = 0.0
+    CoordsAndCharges [Angstrom] = DirectRead { 
+    Records = 5520
+    File = 'PCcharges.dat'
+    }
+  }
+}
+  Scc = Yes
+  MaxSCCIterations = 300
+  ThirdOrderFull = No
+  ThirdOrder = No
+  SlaterKosterFiles {
+    C-C = '/home/borrelli/qmmm/sk/opv/b3lyp/C-C.skf'
+    C-H = '/home/borrelli/qmmm/sk/opv/b3lyp/C-H.skf'
+    C-N = '/home/borrelli/qmmm/sk/opv/b3lyp/C-N.skf'
+    C-O = '/home/borrelli/qmmm/sk/opv/b3lyp/C-O.skf'
+    C-Cl = '/home/borrelli/qmmm/sk/opv/b3lyp/C-Cl.skf'
+    H-C = '/home/borrelli/qmmm/sk/opv/b3lyp/H-C.skf'
+    H-H = '/home/borrelli/qmmm/sk/opv/b3lyp/H-H.skf'
+    H-N = '/home/borrelli/qmmm/sk/opv/b3lyp/H-N.skf'
+    H-O = '/home/borrelli/qmmm/sk/opv/b3lyp/H-O.skf'
+    H-Cl = '/home/borrelli/qmmm/sk/opv/b3lyp/H-Cl.skf'
+    N-C = '/home/borrelli/qmmm/sk/opv/b3lyp/N-C.skf'
+    N-H = '/home/borrelli/qmmm/sk/opv/b3lyp/N-H.skf'
+    N-N = '/home/borrelli/qmmm/sk/opv/b3lyp/N-N.skf'
+    N-O = '/home/borrelli/qmmm/sk/opv/b3lyp/N-O.skf'
+    N-Cl = '/home/borrelli/qmmm/sk/opv/b3lyp/N-Cl.skf'
+    O-C = '/home/borrelli/qmmm/sk/opv/b3lyp/O-C.skf'
+    O-H = '/home/borrelli/qmmm/sk/opv/b3lyp/O-H.skf'
+    O-N = '/home/borrelli/qmmm/sk/opv/b3lyp/O-N.skf'
+    O-O = '/home/borrelli/qmmm/sk/opv/b3lyp/O-O.skf'
+    O-Cl = '/home/borrelli/qmmm/sk/opv/b3lyp/O-Cl.skf'
+    Cl-C = '/home/borrelli/qmmm/sk/opv/b3lyp/Cl-C.skf'
+    Cl-H = '/home/borrelli/qmmm/sk/opv/b3lyp/Cl-H.skf'
+    Cl-N = '/home/borrelli/qmmm/sk/opv/b3lyp/Cl-N.skf'
+    Cl-O = '/home/borrelli/qmmm/sk/opv/b3lyp/Cl-O.skf'
+    Cl-Cl = '/home/borrelli/qmmm/sk/opv/b3lyp/Cl-Cl.skf'
+  }
+  MaxAngularMomentum {
+    N = "p"
+    C = "p"
+    O = "p"
+    Cl = "d"
+    H = "s"
+  }
+  Dispersion = DFTD3 {
+    Damping = BeckeJohnson {
+      a1 = 0.497
+      a2 = 3.622
+    }
+    s6 = 1.0
+    s8 = 0.01
+  }
+  Hybrid = CAM {
+    Screening = MatrixBased {
+    }
+  }
+}
+
+# TD-DFTB Linear Response settings
+ExcitedState = {
+  Casida = {
+    NrOfExcitations = 10          # Number of excited states
+    Symmetry = Singlet            # Spin symmetry (Singlet/Triplet)
+    WriteTransitions = Yes        # Write transition data
+    Diagonaliser = Stratmann {}   # Required for DFTB+ 24.1+
+    # WriteSPTransitions = Yes    # Write single-particle transitions
+    # WriteTransitionDipole = Yes # Write transition dipole moments
+    # StateCouplings = Yes        # Non-adiabatic couplings
+  }
+}
+
+Options { WriteDetailedOut = Yes }
+ParserOptions { ParserVersion = 10 }
+Analysis { PrintForces = Yes }
