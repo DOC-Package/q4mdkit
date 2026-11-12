@@ -9,14 +9,14 @@ import sys
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 os.chdir(SCRIPT_DIR)
-sys.path.insert(0, str(SCRIPT_DIR.parent))
+sys.path.insert(0, str(SCRIPT_DIR.parent / "nvt"))
+sys.path.insert(0, str(SCRIPT_DIR.parent / "nvt-mm"))
 
 from q4mdkit.qmmm.qmmm_config import get_config
 from q4mdkit.qmmm.md_config import get_md_config
-from q4mdkit.qmmm.xml import remove_montecarlo_xml
-from orca_md import read_restart_box
+from q4mdkit.qmmm.xml import read_restart_box, remove_montecarlo_xml
 from qmmm_constraints import capture_qm_hbond_constraints, restore_constraints
-from validate_inputs import validate_vg30_system
+from validate_inputs import EXPECTED_ATOMS, validate_vg30_system
 
 
 parser = argparse.ArgumentParser(description="Run VG30 ORCA QM/MM NVT.")
@@ -40,7 +40,7 @@ if qmatoms != list(range(77)):
     raise ValueError("VG30 QM atom list must contain exactly indices 0 through 76")
 if qmmm_config.qm_backend != "orca":
     raise ValueError("This example requires qm_backend: orca")
-box_vectors = read_restart_box(state_xml)
+box_vectors = read_restart_box(state_xml, expected_atoms=EXPECTED_ATOMS)
 if args.simulation_time is not None:
     if not math.isfinite(args.simulation_time) or args.simulation_time < md_config.timestep:
         parser.error("--simulation-time must be finite and at least one timestep")

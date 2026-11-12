@@ -72,6 +72,18 @@ positions, velocities, and full precision box vectors; NVE continues the ORCA
 NVT velocities. `initial_state.xml` is a local copy with MonteCarlo barostat
 parameters removed. The source state is preserved.
 
+The restart reader is also available as a library utility:
+
+```python
+from q4mdkit.qmmm.xml import read_restart_box
+
+box_vectors = read_restart_box("OpenMM_MD_final_state.xml", expected_atoms=5597)
+```
+
+It returns vectors in angstrom and validates restart positions and velocities.
+For other systems, supply their atom count or omit `expected_atoms` to infer
+the count from the positions.
+
 Each stage directory contains `OpenMM_MD_final_state.xml` and its ASH checkpoint.
 The `output` directory contains `nvt.dcd`/`nve.dcd`, the corresponding CSV energy
 log, first/last-frame PDB files, a separate wrapped DCD for visualization, and
