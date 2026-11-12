@@ -30,6 +30,15 @@ constraints, hydrogen masses, and timestep consistent between stages.
 X–H constraints on VG30 are retained in both stages, matching the existing
 VG30 constrained QM/MM setup.
 
+All six MM and QM/MM MD scripts use the same explicit sequence: load YAML,
+prepare inputs, create the Fragment and theories, run MD, and save the final
+structure. Shared preparation is provided by `q4mdkit.md.prepare_md_run`.
+Input checks use `MMConfig.validate_inputs()` / `QMMMConfig.validate_inputs()`;
+VG30 atom counts and residue names are set in each YAML `validation` section.
+QM X–H constraints are restored by the QM/MM factory when
+`openmm.preserve_qm_hbond_constraints: true` (DFTB NVT and ORCA NVT/NVE).
+See [the reusable MD utilities](../../docs/md.md) for other systems.
+
 ## Run
 
 From the repository root, validate the NVT inputs without importing ASH or

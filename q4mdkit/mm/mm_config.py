@@ -45,6 +45,7 @@ class MMConfig:
         self.pdbfile = paths.get('pdbfile', '')
         # Box file for PBC dimensions
         self.boxfile = paths.get('boxfile', None)
+        self.validation = config.get('validation', {})
         
         # Parallel settings
         parallel = config.get('parallel', {})
@@ -79,6 +80,16 @@ class MMConfig:
         else:
             self.pbc_vectors = None
     
+    def validate_inputs(self):
+        """Validate configured PDB/topology/box inputs without importing ASH."""
+        from q4mdkit.validation import validate_amber_system
+
+        return validate_amber_system(
+            self.pdbfile, self.amber_prmtop,
+            box_path=self.boxfile if self.use_boxfile else None,
+            periodic=self.periodic, **self.validation,
+        )
+
     def _load_boxfile(self, boxfile):
         """
         Load PBC box vectors from file.

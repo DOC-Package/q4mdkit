@@ -85,6 +85,7 @@ class MDConfig:
         # Output settings
         output = config.get('output', {})
         self.output_dir = output.get('directory', 'output')
+        self.protect_existing = output.get('protect_existing', False)
         self.save_gro = output.get('save_gro', False)
         postprocess_wrapped = md_settings.get('postprocess_wrapped_trajectory', None)
         self.postprocess_wrapped = (

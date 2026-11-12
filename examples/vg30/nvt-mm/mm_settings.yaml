@@ -19,3 +19,12 @@ openmm:
   autoconstraints: HBonds
   hydrogenmass: 1.0
   platform: "CPU"
+
+# System-specific checks used by the generic library validator.
+validation:
+  expected_atoms: 5597
+  residue_blocks:
+    - name: VG3
+      count: 77
+    - name: ACE
+      count: 5520

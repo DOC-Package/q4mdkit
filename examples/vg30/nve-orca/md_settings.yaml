@@ -12,3 +12,4 @@ md:
 
 output:
   directory: "output"
+  protect_existing: true

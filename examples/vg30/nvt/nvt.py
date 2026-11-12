@@ -1,45 +1,29 @@
+#!/usr/bin/env python3
+"""Run VG30 QM/MM NVT, using the shared q4mdkit setup utilities."""
+
 import os
-from ash import Fragment
+from pathlib import Path
+
+from q4mdkit.md import prepare_md_run
 from q4mdkit.qmmm.qmmm_config import get_config
 from q4mdkit.qmmm.md_config import get_md_config
-from q4mdkit.qmmm.xml import remove_montecarlo_xml
-from qmmm_constraints import capture_qm_hbond_constraints, restore_constraints
 
+os.chdir(Path(__file__).resolve().parent)
 qmmm_config = get_config("qmmm_settings.yaml")
 md_config = get_md_config("md_settings.yaml")
+statefile = prepare_md_run(
+    qmmm_config, md_config, "nvt",
+    statefile="../npt-mm/OpenMM_MD_final_state.xml",
+    argv=None, description="VG30 QM/MM NVT",
+)
 
-input_pdb = "../npt-mm/output/npt_lastframe.pdb"
-state_xml = "../npt-mm/OpenMM_MD_final_state.xml"
-state_nve = "nve_initial_state.xml"
-remove_montecarlo_xml(state_xml, state_nve)
+from ash import Fragment
 
-output_dir = "output"
-os.makedirs(output_dir, exist_ok=True)
-
-print("="*60)
-print("  NVT Equilibration (300 K)  ")
-print("="*60)
-
-frag = Fragment(pdbfile=input_pdb)
+frag = Fragment(pdbfile=qmmm_config.pdbfile)
 qmatoms = qmmm_config.load_qmatoms()
-
 omm = qmmm_config.create_openmm_theory(fragment=frag)
-qm_hbond_constraints = capture_qm_hbond_constraints(
-    omm.system,
-    qmatoms,
-    frag.elems,
-)
 qm_theory = qmmm_config.create_qm_theory()
-qmmm = qmmm_config.create_qmmm_theory(
-    frag,
-    qmatoms,
-    omm=omm,
-    qm_theory=qm_theory,
-)
-restore_constraints(omm.system, qm_hbond_constraints)
+qmmm = qmmm_config.create_qmmm_theory(frag, qmatoms, omm=omm, qm_theory=qm_theory)
 
-print("\nStarting NVT equilibration...")
-md_config.run_nvt(frag, qmmm, output_dir=output_dir, statefile=state_nve)
-
-print("\nSaving final structure...")
-md_config.save_final_structure(output_dir=output_dir, prefix="nvt")
+md_config.run_nvt(frag, qmmm, statefile=statefile)
+md_config.save_final_structure(prefix="nvt")

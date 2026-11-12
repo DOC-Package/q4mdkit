@@ -19,8 +19,7 @@ VG30_DIR = REPO_ROOT / "examples" / "vg30"
 def workflow(tmp_path):
     root = tmp_path / "vg30"
     for relative in (
-        "orca_md.py", "nvt/qmmm_constraints.py",
-        "nvt-mm/validate_inputs.py", "input/qmatoms",
+        "input/qmatoms",
         "input/vg30_acetonitrile.prmtop",
         "nvt-orca/nvt.py", "nve-orca/nve.py",
         "nvt-orca/qmmm_settings.yaml", "nve-orca/qmmm_settings.yaml",
@@ -93,7 +92,7 @@ def test_rejects_incorrect_qm_selection(workflow):
     (workflow / "input/qmatoms").write_text("0 1 2\n")
     result = validate(workflow, "nvt")
     assert result.returncode != 0
-    assert "0 through 76" in result.stderr
+    assert "QM region has 3 atoms; expected 77" in result.stderr
 
 
 def test_nve_requires_predecessor_state(workflow):
@@ -179,8 +178,6 @@ def test_orca_md_preserves_restart_box_velocities_and_constraints(
         OpenMM_MD=lambda **kwargs: calls.update(md=kwargs),
     )
     monkeypatch.setitem(sys.modules, "ash", ash)
-    for name in ("orca_md", "qmmm_constraints", "validate_inputs"):
-        monkeypatch.delitem(sys.modules, name, raising=False)
     monkeypatch.syspath_prepend(str(workflow))
     monkeypatch.chdir(REPO_ROOT)
     if stage == "nvt":

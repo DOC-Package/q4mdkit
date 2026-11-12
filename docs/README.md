@@ -4,6 +4,7 @@
 
 - [README](../README.md) - Project overview and quick start
 - [examples.md](examples.md) - Complete workflow examples for GROMACS and CHARMM
+- [md.md](md.md) - Shared MM/QM-MM input validation and restart preparation
 
 ## Architecture
 

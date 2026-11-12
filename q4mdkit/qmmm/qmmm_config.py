@@ -309,6 +309,7 @@ class QMMMConfig:
         # Atom selection files
         self.qatoms_file = paths.get('qatoms', '')
         self.actatoms_file = paths.get('actatoms', '')
+        self.validation = config.get('validation', {})
         
         # QM region settings
         qm = config.get('qm', {})
@@ -398,6 +399,7 @@ class QMMMConfig:
         self.periodic_cell_dimensions = openmm.get('periodic_cell_dimensions', None)
         self.use_boxfile = openmm.get('use_boxfile', False)
         self.autoconstraints = openmm.get('autoconstraints', None)
+        self.preserve_qm_hbond_constraints = openmm.get('preserve_qm_hbond_constraints', False)
         self.bondconstraints = openmm.get('bondconstraints', None)
         self.rigidwater = openmm.get('rigidwater', False)
         self.hydrogenmass = openmm.get('hydrogenmass', 1.5)
@@ -420,6 +422,25 @@ class QMMMConfig:
         else:
             self.pbc_vectors = None
     
+    def validate_inputs(self):
+        """Validate configured system, QM selection and supplied QM input files."""
+        from q4mdkit.validation import validate_amber_system
+
+        settings = dict(self.validation)
+        expected_backend = settings.pop('qm_backend', None)
+        if expected_backend is not None and self.qm_backend != expected_backend:
+            raise ValueError(f"This workflow requires qm_backend: {expected_backend}")
+        atom_count = validate_amber_system(
+            self.pdbfile, self.amber_prmtop,
+            box_path=self.boxfile if self.use_boxfile else None,
+            qm_atoms=self.load_qmatoms(), periodic=self.periodic, **settings,
+        )
+        if self.qm_backend == 'dftb':
+            missing = [path for path in self.slater_koster_files.values() if not Path(path).is_file()]
+            if missing:
+                raise FileNotFoundError(f"missing Slater-Koster files: {missing}")
+        return atom_count
+
     def _load_boxfile(self, boxfile):
         """
         Load PBC box vectors from file.
@@ -684,7 +705,12 @@ class QMMMConfig:
             else:
                 qm_theory = self.create_qm_theory()
         
-        return QMMMTheory(
+        constraints = []
+        if self.preserve_qm_hbond_constraints:
+            from .constraints import capture_qm_hbond_constraints
+            constraints = capture_qm_hbond_constraints(omm.system, qmatoms, frag.elems)
+
+        theory = QMMMTheory(
             qm_theory=qm_theory,
             mm_theory=omm,
             fragment=frag,
@@ -697,6 +723,10 @@ class QMMMConfig:
             #TruncPCRadius=15.0,  # Use smaller radius for solvated systems
             printlevel=2
         )
+        if constraints:
+            from .constraints import restore_constraints
+            restore_constraints(omm.system, constraints)
+        return theory
     
     def print_system_info(self, frag, qmatoms):
         """
