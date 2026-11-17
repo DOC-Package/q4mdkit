@@ -85,3 +85,28 @@ ORCA can use the previous snapshot's orbitals through AutoStart. Each new
 analysis run recreates the excitation table. Keep separate output directories
 for independent analyses. Other users of the common tdorca module retain
 its default long-format table and average-spectrum output.
+
+## TD-DFTB: carboxyl n→π* states
+
+`input/dftb_tddft-b3lyp.hsd` (used by `run_tddftb.py`) excludes excitations
+out of the carboxyl oxygen lone pairs:
+
+```hsd
+ExcludeOccupiedOrbitals = {
+  Atoms = O
+  Population = 0.5
+}
+```
+
+With the OPV-B3LYP Slater–Koster set, DFTB places these lone pairs about
+0.9 eV too high relative to the π orbitals, compared with B3LYP/def2-SVP. Their
+dark n→π* states then fall 0.2–0.3 eV above S1 and mix with it. The keyword
+removes transitions out of occupied orbitals whose Mulliken weight on the O
+atoms exceeds 0.5 (normalized to one per orbital; all four O atoms of VG30
+belong to the COOH groups). S1 changes by
+less than 0.02 eV, and S2 becomes the π HOMO−1→LUMO state found by ORCA.
+DFTB+ prints the excluded orbitals in its standard output.
+
+The keyword requires the DFTB+ branch `ext/tddftb-exclude-occ`. Older builds
+stop because the parser ignores the block. With such a build, remove the block
+to recover the previous behavior.

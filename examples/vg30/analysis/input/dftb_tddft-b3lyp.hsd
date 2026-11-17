@@ -153,6 +153,15 @@ ExcitedState = {
     Symmetry = Singlet            # Spin symmetry (Singlet/Triplet)
     WriteTransitions = Yes        # Write transition data
     Diagonaliser = Stratmann {}   # Required for DFTB+ 24.1+
+    # OPV-B3LYP DFTB places the COOH oxygen lone pairs ~0.9 eV too high
+    # (vs. B3LYP/def2-SVP), so their dark n->pi* transitions fall near S1.
+    # Remove transitions out of occupied orbitals whose Mulliken weight
+    # on the O atoms exceeds 0.5 (normalized to one per orbital).
+    # Requires DFTB+ branch ext/tddftb-exclude-occ.
+    ExcludeOccupiedOrbitals = {
+      Atoms = O
+      Population = 0.5
+    }
     # WriteSPTransitions = Yes    # Write single-particle transitions
     # WriteTransitionDipole = Yes # Write transition dipole moments
     # StateCouplings = Yes        # Non-adiabatic couplings
